@@ -20,7 +20,7 @@ The NeurOne Tesla (Bittium Oy, Oulu, Finland) has the real-time communcation fun
 - Task 2: establshh the real-time oscillatory phase estimate algorithm.
 
 ### Related resources
-- [User manual of NeurOne](https://github.com/fahsuanlin/neuronavigation/doc/). See Appendix 11 for details.
+- [User manual of NeurOne](https://github.com/fahsuanlin/neuronavigation/blob/main/doc/NeurOne%20User%20Manual.pdf). See Appendix 11 for details.
 - [Phaseimate](https://github.com/bnplab/phastimate): the toolbox from Tuebingen/CAMH for oscillatory phase estimate
 - [A state-space model for phase estimate](https://elifesciences.org/articles/68803). The codes are [here](https://github.com/tne-lab/phase-calculator).
 -- Task: Use Matlab Realtime to establish the communcation between the EEG system for real-time oscillatory phase estimate
