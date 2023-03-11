@@ -2,10 +2,7 @@ The project of imaging-guided neuro-modulation
 
 # Navigation by camera
 
-Use a camera to track the relative position between the brain and a device in real time.
-
-## Setup of the camera
-We are using NDI Polaris camera (VEGA ST) to perform the real-time tracking. Some related info:
+Use a camera to track the relative position between the brain and a device in real time. We are using NDI Polaris camera (VEGA ST) to perform the real-time tracking. Some related info:
 
 - [PlusSever](https://github.com/PlusToolkit/PlusLib): a server on a computer (Windows system for now) to communicate with the camera
 - [Our setup](https://github.com/fahsuanlin/labmanual/wiki/27.-Connec-to-Polaris-Vega-camera) so far (via Dr. Aapo Nummenmma's help).
