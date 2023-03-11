@@ -7,8 +7,9 @@ Use a camera to track the relative position between the brain and a device in re
 ## Setup of the camera
 We are using NDI Polaris camera (VEGA ST) to perform the real-time tracking. Some related info:
 
-- PlusSever: a server on a computer (Windows system for now) to communicate with the camera
--- Task: use CMake to enable Mac computers for this communcation
+- [PlusSever](https://github.com/PlusToolkit/PlusLib): a server on a computer (Windows system for now) to communicate with the camera
+- [Our setup](https://github.com/fahsuanlin/labmanual/wiki/27.-Connec-to-Polaris-Vega-camera) so far (via Dr. Aapo Nummenmma's help).
+-- Task: use CMake to enable Mac computers for this communcation. [This info](https://github.com/PlusToolkit/PlusBuild) is potentially useful.
 
 # Real-time communication wih the EEG system
 The NeuroOne Tesla (Bittium Oy, Oulu, Finland) has the real-time communcation function via UDP. 
