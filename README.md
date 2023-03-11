@@ -14,12 +14,13 @@ Use a camera to track the relative position between the brain and a device in re
 - [Our setup](https://github.com/fahsuanlin/labmanual/wiki/27.-Connec-to-Polaris-Vega-camera) so far (via Dr. Aapo Nummenmma's help).
 
 ## Real-time communication wih the EEG system
-The NeuroOne Tesla (Bittium Oy, Oulu, Finland) has the real-time communcation function via UDP. 
+The NeurOne Tesla (Bittium Oy, Oulu, Finland) has the real-time communcation function via UDP. 
 
 - Task 1: establish the communicaiton between a computer with Matlab and the EEG system via UDP protocol.
 - Task 2: establshh the real-time oscillatory phase estimate algorithm.
 
 ### Related resources
+- [User manual of NeurOne](https://github.com/fahsuanlin/neuronavigation/doc/). See Appendix 11 for details.
 - [Phaseimate](https://github.com/bnplab/phastimate): the toolbox from Tuebingen/CAMH for oscillatory phase estimate
 - [A state-space model for phase estimate](https://elifesciences.org/articles/68803). The codes are [here](https://github.com/tne-lab/phase-calculator).
 -- Task: Use Matlab Realtime to establish the communcation between the EEG system for real-time oscillatory phase estimate
