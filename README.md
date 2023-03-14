@@ -7,7 +7,7 @@ The project of imaging-guided neuro-modulation
 Use a camera to track the relative position between the brain and a device in real time. We are using NDI Polaris camera (VEGA ST) to perform the real-time tracking. Some related info:
 
 - Task 1: use CMake to enable Mac computers for this communcation. [This info](https://github.com/PlusToolkit/PlusBuild) is potentially useful.
-- Task 2: build a program in Matlab for real-time tracking of of camera markers.
+- Task 2: build a program in Matlab for real-time tracking of of camera markers. This may require real-time Matlab toolbox (only available in Windows).
 
 ### Related resources
 - [PlusSever](https://github.com/PlusToolkit/PlusLib): a server on a computer (Windows system for now) to communicate with the camera
