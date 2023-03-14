@@ -4,6 +4,8 @@ The project of imaging-guided neuro-modulation
 
 ## Navigation by camera
 
+[https://github.com/fahsuanlin/neuronavigation/blob/master/images/camera_guided_tms.png]
+
 Use a camera to track the relative position between the brain and a device in real time. We are using NDI Polaris camera (VEGA ST) to perform the real-time tracking. Some related info:
 
 - Task 1: use CMake to enable Mac computers for this communcation. [This info](https://github.com/PlusToolkit/PlusBuild) is potentially useful.
@@ -14,6 +16,10 @@ Use a camera to track the relative position between the brain and a device in re
 - [Our setup](https://github.com/fahsuanlin/labmanual/wiki/27.-Connec-to-Polaris-Vega-camera) so far (via Dr. Aapo Nummenmma's help).
 
 ## Real-time communication wih the EEG system
+
+[https://github.com/fahsuanlin/neuronavigation/blob/master/images/eeg_guided_tms.png]
+
+
 The NeurOne Tesla (Bittium Oy, Oulu, Finland) has the real-time communcation function via UDP. 
 
 - Task 1: establish the communicaiton between a computer with Matlab and the EEG system via UDP protocol.
