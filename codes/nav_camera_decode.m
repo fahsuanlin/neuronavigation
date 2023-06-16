@@ -24,31 +24,45 @@ switch lower(command) %some commands; not an exhaustive set
             reply_length            = typecast(uint8(buffer(buffer_counter:buffer_counter+2-1)), 'uint16'); buffer_counter=buffer_counter+2;
             header_crc              = typecast(uint8(buffer(buffer_counter:buffer_counter+2-1)), 'uint16'); buffer_counter=buffer_counter+2;
             number_of_handles       = typecast(uint8(buffer(buffer_counter:buffer_counter+1-1)), 'uint8'); buffer_counter=buffer_counter+1;
-            handle_n                = typecast(uint8(buffer(buffer_counter:buffer_counter+1-1)), 'uint8'); buffer_counter=buffer_counter+1;
-            handle_status           = typecast(uint8(buffer(buffer_counter:buffer_counter+1-1)), 'uint8'); buffer_counter=buffer_counter+1;
 
-            str{1}=sprintf('BX: [%04d] bytes read; reply length = [%04d] bytes \n',length(buffer), reply_length);
+            %str{1}=sprintf('BX: [%04d] bytes read; reply length = [%04d] bytes; [%d] handels; handel [%03d]; status:%d \n',length(buffer), reply_length,number_of_handles,handle_n,handle_status);
+            str{1}=sprintf('BX: [%04d] bytes read; reply length = [%04d] bytes; [%d] handels; \n',length(buffer), reply_length,number_of_handles);
 
             component=[];
-            switch handle_status
-                case 1 %valid
-                    component.q0 = typecast(uint8(buffer(buffer_counter:buffer_counter+4-1)), 'uint32'); buffer_counter=buffer_counter+4;
-                    component.qx = typecast(uint8(buffer(buffer_counter:buffer_counter+4-1)), 'uint32'); buffer_counter=buffer_counter+4;
-                    component.qy = typecast(uint8(buffer(buffer_counter:buffer_counter+4-1)), 'uint32'); buffer_counter=buffer_counter+4;
-                    component.qz = typecast(uint8(buffer(buffer_counter:buffer_counter+4-1)), 'uint32'); buffer_counter=buffer_counter+4;
-                    component.tx = typecast(uint8(buffer(buffer_counter:buffer_counter+4-1)), 'uint32'); buffer_counter=buffer_counter+4;
-                    component.ty = typecast(uint8(buffer(buffer_counter:buffer_counter+4-1)), 'uint32'); buffer_counter=buffer_counter+4;
-                    component.tz = typecast(uint8(buffer(buffer_counter:buffer_counter+4-1)), 'uint32'); buffer_counter=buffer_counter+4;
-                    component.error = typecast(uint8(buffer(buffer_counter:buffer_counter+4-1)), 'uint32'); buffer_counter=buffer_counter+4;
-                    component.port_status = typecast(uint8(buffer(buffer_counter:buffer_counter+4-1)), 'uint32'); buffer_counter=buffer_counter+4;
-                    component.frame_number = typecast(uint8(buffer(buffer_counter:buffer_counter+4-1)), 'uint32'); buffer_counter=buffer_counter+4;
+            for handle_idx=1:number_of_handles
+                component(handle_idx).handle_n                = typecast(uint8(buffer(buffer_counter:buffer_counter+1-1)), 'uint8'); buffer_counter=buffer_counter+1;
+                component(handle_idx).handle_status           = typecast(uint8(buffer(buffer_counter:buffer_counter+1-1)), 'uint8'); buffer_counter=buffer_counter+1;
 
-                    str{2}=sprintf('\tstatus 1: q0=%2.2f; qx=%2.2f; qy=%2.2f; qz=%2.2f; tx=%2.2f; ty=%2.2f; tz=%2.2f; error=%2.2f;', component.q0, component.qx, component.qy, component.qz, component.tx, component.ty, component.tz, component.error);
-                    
-                case 2 %missing
-                    component.port_status = typecast(uint8(buffer(buffer_counter:buffer_counter+4-1)), 'uint32'); buffer_counter=buffer_counter+4;
-                    component.frame_number = typecast(uint8(buffer(buffer_counter:buffer_counter+4-1)), 'uint32'); buffer_counter=buffer_counter+4;
-                case 4 %disabled
+                switch component(handle_idx).handle_status  
+                    case 1 %valid
+                        component(handle_idx).q0 = typecast(uint8(buffer(buffer_counter:buffer_counter+4-1)), 'single'); buffer_counter=buffer_counter+4;
+                        component(handle_idx).qx = typecast(uint8(buffer(buffer_counter:buffer_counter+4-1)), 'single'); buffer_counter=buffer_counter+4;
+                        component(handle_idx).qy = typecast(uint8(buffer(buffer_counter:buffer_counter+4-1)), 'single'); buffer_counter=buffer_counter+4;
+                        component(handle_idx).qz = typecast(uint8(buffer(buffer_counter:buffer_counter+4-1)), 'single'); buffer_counter=buffer_counter+4;
+                        component(handle_idx).tx = typecast(uint8(buffer(buffer_counter:buffer_counter+4-1)), 'single'); buffer_counter=buffer_counter+4;
+                        component(handle_idx).ty = typecast(uint8(buffer(buffer_counter:buffer_counter+4-1)), 'single'); buffer_counter=buffer_counter+4;
+                        component(handle_idx).tz = typecast(uint8(buffer(buffer_counter:buffer_counter+4-1)), 'single'); buffer_counter=buffer_counter+4;
+                        component(handle_idx).error = typecast(uint8(buffer(buffer_counter:buffer_counter+4-1)), 'uint32'); buffer_counter=buffer_counter+4;
+                        component(handle_idx).port_status = typecast(uint8(buffer(buffer_counter:buffer_counter+4-1)), 'uint32'); buffer_counter=buffer_counter+4;
+                        component(handle_idx).frame_number = typecast(uint8(buffer(buffer_counter:buffer_counter+4-1)), 'uint32'); buffer_counter=buffer_counter+4;
+
+                        str{1+handle_idx}=sprintf('\thandle [%d]::status[%d];  q0=%2.2f; qx=%2.2f; qy=%2.2f; qz=%2.2f; tx=%2.2f; ty=%2.2f; tz=%2.2f; error=%2.2f;', component(handle_idx).handle_n, component(handle_idx).handle_status, component(handle_idx).q0, component(handle_idx).qx, component(handle_idx).qy, component(handle_idx).qz, component(handle_idx).tx, component(handle_idx).ty, component(handle_idx).tz, component(handle_idx).error);
+                    case 2 %missing
+                        component(handle_idx).port_status = typecast(uint8(buffer(buffer_counter:buffer_counter+4-1)), 'uint32'); buffer_counter=buffer_counter+4;
+                        component(handle_idx).frame_number = typecast(uint8(buffer(buffer_counter:buffer_counter+4-1)), 'uint32'); buffer_counter=buffer_counter+4;
+                        
+                        component(handle_idx).q0 = nan;
+                        component(handle_idx).qx = nan;
+                        component(handle_idx).qy = nan;
+                        component(handle_idx).qz = nan;
+                        component(handle_idx).tx = nan;
+                        component(handle_idx).ty = nan;
+                        component(handle_idx).tz = nan;
+
+                        str{1+handle_idx}=sprintf('\thandle [%d]::status[%d]; missing!', component(handle_idx).handle_n, component(handle_idx).handle_status);
+                    case 4 %disabled
+
+                end;
 
             end;
 
@@ -67,17 +81,17 @@ switch lower(command) %some commands; not an exhaustive set
             buffer_counter=1;
 
             start_sequence          = typecast(uint8(buffer(buffer_counter:buffer_counter+2-1)), 'uint16'); buffer_counter=buffer_counter+2;
-            reply_length            = typecast(uint8(buffer(buffer_counter:buffer_counter+2-1)), 'uint16'); buffer_counter=buffer_counter+2;
-            header_crc              = typecast(uint8(buffer(buffer_counter:buffer_counter+2-1)), 'uint16'); buffer_counter=buffer_counter+2;
-            gbf_version             = typecast(uint8(buffer(buffer_counter:buffer_counter+2-1)), 'uint16'); buffer_counter=buffer_counter+2;
-            component_count         = typecast(uint8(buffer(buffer_counter:buffer_counter+2-1)), 'uint16'); buffer_counter=buffer_counter+2;
-
-            str='';
-            str{1}=sprintf('%04d components; [%04d] bytes read; reply length = [%04d] bytes \n',component_count, length(buffer), reply_length);
-
             component=[];
             switch(dec2hex(start_sequence))
                 case 'A5C4' %data...
+                    reply_length            = typecast(uint8(buffer(buffer_counter:buffer_counter+2-1)), 'uint16'); buffer_counter=buffer_counter+2;
+                    header_crc              = typecast(uint8(buffer(buffer_counter:buffer_counter+2-1)), 'uint16'); buffer_counter=buffer_counter+2;
+                    gbf_version             = typecast(uint8(buffer(buffer_counter:buffer_counter+2-1)), 'uint16'); buffer_counter=buffer_counter+2;
+                    component_count         = typecast(uint8(buffer(buffer_counter:buffer_counter+2-1)), 'uint16'); buffer_counter=buffer_counter+2;
+
+                    str='';
+                    str{1}=sprintf('%04d components; [%04d] bytes read; reply length = [%04d] bytes \n',component_count, length(buffer), reply_length);
+
 
                     for component_idx=1:component_count
                         component(component_idx).component_type     = typecast(uint8(buffer(buffer_counter:buffer_counter+2-1)), 'uint16'); buffer_counter=buffer_counter+2;
@@ -86,7 +100,7 @@ switch lower(command) %some commands; not an exhaustive set
                         component(component_idx).item_count         = typecast(uint8(buffer(buffer_counter:buffer_counter+4-1)), 'uint32'); buffer_counter=buffer_counter+4;
 
                         component(component_idx).payload            = typecast(uint8(buffer(buffer_counter:buffer_counter+component(component_idx).component_size-10-1)), 'uint8'); buffer_counter=buffer_counter+component(component_idx).component_size-10;
-                        str{end+1}=sprintf('\t[%d]:: [%02d, %02d, %02d, %02d]\n',...
+                        str{end+1}=sprintf('\t[%d]:: [%02d, %02d, %02d, %02d]',...
                             component_idx, ...
                             component(component_idx).component_type,...
                             component(component_idx).component_size,...
@@ -106,7 +120,7 @@ switch lower(command) %some commands; not an exhaustive set
                             component(component_idx).frame(frame_idx).gbf_version       =   typecast(uint8(component(component_idx).payload(component_counter:component_counter+2-1)), 'uint16'); component_counter=component_counter+2;
                             component(component_idx).frame(frame_idx).component_count   =   typecast(uint8(component(component_idx).payload(component_counter:component_counter+2-1)), 'uint16'); component_counter=component_counter+2;
 
-                            str{end+1}=sprintf('---->> %02d, %02d, %02d, %02d, %02d, %02d, %02d\n',component(component_idx).frame(frame_idx).frame_type,component(component_idx).frame(frame_idx).sequence_index, component(component_idx).frame(frame_idx).frame_number , component(component_idx).frame(frame_idx).timestamp_s, component(component_idx).frame(frame_idx).timestamp_ns, component(component_idx).frame(frame_idx).gbf_version, component(component_idx).frame(frame_idx).component_count  );
+                            str{end+1}=sprintf('---->> %02d, %02d, %02d, %02d, %02d, %02d, %02d',component(component_idx).frame(frame_idx).frame_type,component(component_idx).frame(frame_idx).sequence_index, component(component_idx).frame(frame_idx).frame_number , component(component_idx).frame(frame_idx).timestamp_s, component(component_idx).frame(frame_idx).timestamp_ns, component(component_idx).frame(frame_idx).gbf_version, component(component_idx).frame(frame_idx).component_count  );
 
                             for data_idx=1:component(component_idx).frame(frame_idx).component_count
                                 component(component_idx).frame(frame_idx).data(data_idx).component_type      =   typecast(uint8(component(component_idx).payload(component_counter:component_counter+2-1)), 'uint16'); component_counter=component_counter+2;
@@ -114,33 +128,53 @@ switch lower(command) %some commands; not an exhaustive set
                                 component(component_idx).frame(frame_idx).data(data_idx).item_format_option  =   typecast(uint8(component(component_idx).payload(component_counter:component_counter+2-1)), 'uint16'); component_counter=component_counter+2;
                                 component(component_idx).frame(frame_idx).data(data_idx).item_count          =   typecast(uint8(component(component_idx).payload(component_counter:component_counter+4-1)), 'uint32'); component_counter=component_counter+4;
 
-                                str{end+1}=sprintf('---------->> %02d, %02d, %02d, %02d\n',component(component_idx).frame(frame_idx).data(data_idx).component_type, component(component_idx).frame(frame_idx).data(data_idx).component_size, component(component_idx).frame(frame_idx).data(data_idx).item_format_option, component(component_idx).frame(frame_idx).data(data_idx).item_count );
+                                str{end+1}=sprintf('---------->> %02d, %02d, %02d, %02d',component(component_idx).frame(frame_idx).data(data_idx).component_type, component(component_idx).frame(frame_idx).data(data_idx).component_size, component(component_idx).frame(frame_idx).data(data_idx).item_format_option, component(component_idx).frame(frame_idx).data(data_idx).item_count );
 
-                                for data_6d_item_idx=1:component(component_idx).frame(frame_idx).data(data_idx).item_count
-                                    try
-                                        component(component_idx).frame(frame_idx).data(data_idx).data_6d_item(data_6d_item_idx).tool_handle  =   typecast(uint8(component(component_idx).payload(component_counter:component_counter+2-1)), 'uint16'); component_counter=component_counter+2;
-                                        component(component_idx).frame(frame_idx).data(data_idx).data_6d_item(data_6d_item_idx).handle_status=   typecast(uint8(component(component_idx).payload(component_counter:component_counter+2-1)), 'uint16'); component_counter=component_counter+2;
-                                        %if(strcmp(dec2hex(component_idx).frame(frame_idx).data(data_idx).data_6d_item(data_6d_item_idx).handle_status,'2000'))
-                                        component(component_idx).frame(frame_idx).data(data_idx).data_6d_item(data_6d_item_idx).q0           =   typecast(uint8(component(component_idx).payload(component_counter:component_counter+4-1)), 'single'); component_counter=component_counter+4;
-                                        component(component_idx).frame(frame_idx).data(data_idx).data_6d_item(data_6d_item_idx).qx           =   typecast(uint8(component(component_idx).payload(component_counter:component_counter+4-1)), 'single'); component_counter=component_counter+4;
-                                        component(component_idx).frame(frame_idx).data(data_idx).data_6d_item(data_6d_item_idx).qy           =   typecast(uint8(component(component_idx).payload(component_counter:component_counter+4-1)), 'single'); component_counter=component_counter+4;
-                                        component(component_idx).frame(frame_idx).data(data_idx).data_6d_item(data_6d_item_idx).qz           =   typecast(uint8(component(component_idx).payload(component_counter:component_counter+4-1)), 'single'); component_counter=component_counter+4;
-                                        component(component_idx).frame(frame_idx).data(data_idx).data_6d_item(data_6d_item_idx).tx           =   typecast(uint8(component(component_idx).payload(component_counter:component_counter+4-1)), 'single'); component_counter=component_counter+4;
-                                        component(component_idx).frame(frame_idx).data(data_idx).data_6d_item(data_6d_item_idx).ty           =   typecast(uint8(component(component_idx).payload(component_counter:component_counter+4-1)), 'single'); component_counter=component_counter+4;
-                                        component(component_idx).frame(frame_idx).data(data_idx).data_6d_item(data_6d_item_idx).tz           =   typecast(uint8(component(component_idx).payload(component_counter:component_counter+4-1)), 'single'); component_counter=component_counter+4;
-                                        component(component_idx).frame(frame_idx).data(data_idx).data_6d_item(data_6d_item_idx).error        =   typecast(uint8(component(component_idx).payload(component_counter:component_counter+4-1)), 'single'); component_counter=component_counter+4;
+                                if(component(component_idx).frame(frame_idx).data(data_idx).component_type==2)
+                                    for data_6d_item_idx=1:component(component_idx).frame(frame_idx).data(data_idx).item_count
+                                        try
+                                            component(component_idx).frame(frame_idx).data(data_idx).data_6d_item(data_6d_item_idx).tool_handle  =   typecast(uint8(component(component_idx).payload(component_counter:component_counter+2-1)), 'uint16'); component_counter=component_counter+2;
+                                            component(component_idx).frame(frame_idx).data(data_idx).data_6d_item(data_6d_item_idx).handle_status1=   typecast(uint8(component(component_idx).payload(component_counter:component_counter+1-1)), 'uint8'); component_counter=component_counter+1;
+                                            component(component_idx).frame(frame_idx).data(data_idx).data_6d_item(data_6d_item_idx).handle_status2=   typecast(uint8(component(component_idx).payload(component_counter:component_counter+1-1)), 'uint8'); component_counter=component_counter+1;
+                                            %if(strcmp(dec2hex(component_idx).frame(frame_idx).data(data_idx).data_6d_item(data_6d_item_idx).handle_status,'2000'))
+                                            if(component(component_idx).frame(frame_idx).data(data_idx).data_6d_item(data_6d_item_idx).handle_status1==0&component(component_idx).frame(frame_idx).data(data_idx).data_6d_item(data_6d_item_idx).handle_status2==0)
+                                                component(component_idx).frame(frame_idx).data(data_idx).data_6d_item(data_6d_item_idx).q0           =   typecast(uint8(component(component_idx).payload(component_counter:component_counter+4-1)), 'single'); component_counter=component_counter+4;
+                                                component(component_idx).frame(frame_idx).data(data_idx).data_6d_item(data_6d_item_idx).qx           =   typecast(uint8(component(component_idx).payload(component_counter:component_counter+4-1)), 'single'); component_counter=component_counter+4;
+                                                component(component_idx).frame(frame_idx).data(data_idx).data_6d_item(data_6d_item_idx).qy           =   typecast(uint8(component(component_idx).payload(component_counter:component_counter+4-1)), 'single'); component_counter=component_counter+4;
+                                                component(component_idx).frame(frame_idx).data(data_idx).data_6d_item(data_6d_item_idx).qz           =   typecast(uint8(component(component_idx).payload(component_counter:component_counter+4-1)), 'single'); component_counter=component_counter+4;
+                                                component(component_idx).frame(frame_idx).data(data_idx).data_6d_item(data_6d_item_idx).tx           =   typecast(uint8(component(component_idx).payload(component_counter:component_counter+4-1)), 'single'); component_counter=component_counter+4;
+                                                component(component_idx).frame(frame_idx).data(data_idx).data_6d_item(data_6d_item_idx).ty           =   typecast(uint8(component(component_idx).payload(component_counter:component_counter+4-1)), 'single'); component_counter=component_counter+4;
+                                                component(component_idx).frame(frame_idx).data(data_idx).data_6d_item(data_6d_item_idx).tz           =   typecast(uint8(component(component_idx).payload(component_counter:component_counter+4-1)), 'single'); component_counter=component_counter+4;
+                                                component(component_idx).frame(frame_idx).data(data_idx).data_6d_item(data_6d_item_idx).error        =   typecast(uint8(component(component_idx).payload(component_counter:component_counter+4-1)), 'single'); component_counter=component_counter+4;
 
-                                        str{end+1}=sprintf('---------------------{%02d}>> <<%2.2f, %2.2f, %2.2f>>\n',...
-                                            component(component_idx).frame(frame_idx).data(data_idx).data_6d_item(data_6d_item_idx).tool_handle,...
-                                            component(component_idx).frame(frame_idx).data(data_idx).data_6d_item(data_6d_item_idx).tx,...
-                                            component(component_idx).frame(frame_idx).data(data_idx).data_6d_item(data_6d_item_idx).ty,...
-                                            component(component_idx).frame(frame_idx).data(data_idx).data_6d_item(data_6d_item_idx).tz);
-                                    catch
+                                                str{end+1}=sprintf('---------------------{%02d}>> [%02d|%s] <<%2.2f, %2.2f, %2.2f>>',...
+                                                    component(component_idx).frame(frame_idx).data(data_idx).data_6d_item(data_6d_item_idx).tool_handle,...
+                                                    component(component_idx).frame(frame_idx).data(data_idx).data_6d_item(data_6d_item_idx).handle_status1,...
+                                                    dec2bin(component(component_idx).frame(frame_idx).data(data_idx).data_6d_item(data_6d_item_idx).handle_status2,8),...
+                                                    component(component_idx).frame(frame_idx).data(data_idx).data_6d_item(data_6d_item_idx).tx,...
+                                                    component(component_idx).frame(frame_idx).data(data_idx).data_6d_item(data_6d_item_idx).ty,...
+                                                    component(component_idx).frame(frame_idx).data(data_idx).data_6d_item(data_6d_item_idx).tz);
+                                            end;
+                                        catch
 
-                                        fprintf('error here 1...\n');
-                                        varargout{1}=component;
-                                        break;
-                                        %                                        keyboard;
+                                            fprintf('6d data reading error...\n');
+                                            varargout{1}=component;
+
+
+                                            if(~isempty(str))
+                                                if(iscell(str))
+                                                    for idx=1:length(str)
+                                                        fprintf('%s\n',str{idx});
+                                                    end;
+                                                else
+                                                    fprintf('%s\n',str);
+                                                end;
+                                            end;
+
+                                            fprintf('end of 6d data reading error...\n');
+
+                                            break;
+                                        end;
                                     end;
                                 end;
                             end;
@@ -149,17 +183,52 @@ switch lower(command) %some commands; not an exhaustive set
 
 
                     varargout{1}=component;
+
+                case 'A5C8' %extended data...
+                    fprintf('extended data ...\n');
+
+
+                    reply_length            = typecast(uint8(buffer(buffer_counter:buffer_counter+2-1)), 'uint32'); buffer_counter=buffer_counter+4;
+                    gbf_version             = typecast(uint8(buffer(buffer_counter:buffer_counter+2-1)), 'uint16'); buffer_counter=buffer_counter+2;
+                    component_count         = typecast(uint8(buffer(buffer_counter:buffer_counter+2-1)), 'uint16'); buffer_counter=buffer_counter+2;
+
+                    str='';
+                    str{1}=sprintf('%04d components; [%04d] bytes read; reply length = [%04d] bytes \n',component_count, length(buffer), reply_length);
+
                 otherwise
                     varargout{1}=component;
 
-                    fprintf('error here 2...\n');
+                    fprintf('error  2...\n');
+                    str{1}=sprintf('unknown start sequence [%s]',dec2hex(start_sequence));
+                    if(~isempty(str))
+                        if(iscell(str))
+                            for idx=1:length(str)
+                                fprintf('%s\n',str{idx});
+                            end;
+                        else
+                            fprintf('%s\n',str);
+                        end;
+                    end;
 
+                    fprintf('end of error 2...\n');
             end;
 
         catch
             varargout{1}=component;
 
-            fprintf('error here 3...\n');
+            fprintf('error  3...\n');
+            if(~isempty(str))
+                if(iscell(str))
+                    for idx=1:length(str)
+                        fprintf('%s\n',str{idx});
+                    end;
+                else
+                    fprintf('%s\n',str);
+                end;
+            end;
+            fprintf('end of error 3...\n');
+
+
         end;
 
     case 'phrq' %get new port handel
@@ -213,8 +282,9 @@ switch lower(command) %some commands; not an exhaustive set
             port_handle=[];
             if(~isempty(param))
                 if(length(param)==6)
-
+                %if(1)
                     switch(str2num(param(3:end)))
+                    %switch(str2num(param))
 
                         case 1 %0001; tool info
                             port_handle.tool_info.tool_type=buffer(1:8);
