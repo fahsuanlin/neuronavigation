@@ -260,6 +260,7 @@ switch lower(command) %some commands; not an exhaustive set
 
                 port_handle(idx).status=str2num(status_str);
                 port_handle(idx).status_bin=dec2bin(hex2dec(status_str),8);
+                port_handle(idx).status_bin;
 
                 port_handle(idx).status_occupied=str2num(port_handle(idx).status_bin(8));
                 port_handle(idx).status_switch1closed=str2num(port_handle(idx).status_bin(7));
@@ -271,12 +272,24 @@ switch lower(command) %some commands; not an exhaustive set
                 port_handle(idx).status_tooldetected=str2num(port_handle(idx).status_bin(1));
 
                 %str=strcat(str,sprintf('port handle [%02d]::%04d\t\n',port_handle(idx).number,port_handle(idx).status));
-                str{idx}=sprintf('port handle [%02d]::%04d\t\n',port_handle(idx).number,port_handle(idx).status);
+                str{idx}=sprintf('port handle [%02d]::%04d\toccupied:%d\tinitialized:%d\tenabled:%d\tdetected:%d\t\n',port_handle(idx).number,port_handle(idx).status,...
+                    port_handle(idx).status_occupied,...
+                    port_handle(idx).status_initialized,...
+                    port_handle(idx).status_enabled,...
+                    port_handle(idx).status_tooldetected);
 
                 varargout{1}=port_handle;
             end;
         catch
         end;
+
+    case 'pena' %report port handel status
+        try
+
+            buffer
+        catch
+        end;
+
     case 'phinf'
         try
             port_handle=[];
