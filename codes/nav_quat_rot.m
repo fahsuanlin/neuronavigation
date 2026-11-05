@@ -12,6 +12,9 @@ function [M,euler]=nav_quat_rot(q,varargin)
 %
 
 try
+    q=double(q(:));
+    q=q/norm(q);   %camera quaternions are single precision and only ~unit length
+
     M=zeros(3,3); %rotation matrix
     M(1,1)=q(1)*q(1)+q(2)*q(2)-q(3)*q(3)-q(4)*q(4);
     M(1,2)=2*(q(2)*q(3)-q(1)*q(4));
