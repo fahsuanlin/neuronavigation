@@ -62,12 +62,17 @@ else
     app.nav_camera.dot_h(component_idx)=plot3(app.UIAxes,p(1),p(2),p(3),'.');
 end;
 
-set(app.nav_camera.dot_h(component_idx),'markersize',24)
+% dot colour = the tool's colour in the tool table (set by Tool check); same tool numbering
+% as the Brain/Landmark tool dropdowns. Fallback before Tool check: marker_color.
 if(isempty(color))
-    set(app.nav_camera.dot_h(component_idx),'Color',marker_color{mod(component_idx-1,numel(marker_color))+1});
-else
-    set(app.nav_camera.dot_h(component_idx),'Color',color);
+    if(isfield(app.nav_camera,'tool') && numel(app.nav_camera.tool)>=component_idx ...
+            && isfield(app.nav_camera.tool,'color') && ~isempty(app.nav_camera.tool(component_idx).color))
+        color=app.nav_camera.tool(component_idx).color;
+    else
+        color=marker_color{mod(component_idx-1,numel(marker_color))+1};
+    end;
 end;
+set(app.nav_camera.dot_h(component_idx),'MarkerSize',24,'Color',color);
 
 % auto-fit app.UIAxes to where the tools actually are:
 % keep a bounding box of all tool positions seen so far (it only grows) and
@@ -110,6 +115,30 @@ if(size(app.nav_camera.last_p,2)<component_idx)
 end;
 app.nav_camera.last_p(:,component_idx)=p(:);
 
+% remember the latest full pose (camera frame) of each tool and when it arrived;
+% nav_brain_landmark pairs pointer and head-tracker poses from the same moment
+if(~isfield(app.nav_camera,'clock0') || isempty(app.nav_camera.clock0))
+    app.nav_camera.clock0=tic;
+end;
+if(~isfield(app.nav_camera,'last_R'))
+    app.nav_camera.last_R=nan(4,4,0);
+    app.nav_camera.last_R_t=zeros(1,0);
+end;
+if(size(app.nav_camera.last_R,3)<component_idx)
+    app.nav_camera.last_R(:,:,end+1:component_idx)=nan;
+    app.nav_camera.last_R_t(end+1:component_idx)=-inf;
+end;
+app.nav_camera.last_R(:,:,component_idx)=R;
+app.nav_camera.last_R_t(component_idx)=toc(app.nav_camera.clock0);
+
+% landmark sampling in progress -> hand this pose to the sampler
+if(isfield(app.nav_camera,'landmark_sampling') && ~isempty(app.nav_camera.landmark_sampling))
+    nav_brain_landmark(app,'sample_frame',R,component_idx);
+end;
+
+% enable/disable 'Landmark sample' according to whether both tools are currently valid
+nav_brain_landmark(app,'update_button');
+
 % offset of each tool from its marked reference -> MarkrefUITable (throttled to ~5 Hz)
 if(isfield(app.nav_camera,'ref_p') && size(app.nav_camera.ref_p,2)>=component_idx && all(isfinite(app.nav_camera.ref_p(:,component_idx))))
     if(~isfield(app.nav_camera,'ref_table_t') || toc(app.nav_camera.ref_table_t)>0.2)
@@ -132,70 +161,108 @@ if(~isfield(app.nav_camera,'head_tool_idx') || app.nav_camera.head_tool_idx~=hea
     app.nav_camera.R0 = [];
 end;
 
-if(isempty(find(isnan(R(:))))&isempty(find(isinf(R(:)))) & component_idx==head_tool_idx)
-    if(isfield(app.nav_camera,'etc_render_fsbrain'))
-        if(~isempty(app.nav_camera.etc_render_fsbrain))
-            try
-                %[M,euler]=nav_quat_rot(q);
+% how the brain in the Brain tab moves (see nav_brain_landmark):
+%   no landmark file loaded           -> follows the head tool relative to its first pose,
+%                                        rotating about the brain centroid (no registration)
+%   landmarks loaded, not all sampled -> held still until the registration is done
+%   registered (app.nav_camera.reg.T) -> follows the head tracker in anatomical (MRI) axes,
+%                                        and the landmark tool's hot spot is shown as a dot
+has_lm   = isfield(app.nav_camera,'landmark') && ~isempty(app.nav_camera.landmark);
+has_reg  = isfield(app.nav_camera,'reg') && ~isempty(app.nav_camera.reg);
+brain_ok = isfield(app.nav_camera,'etc_render_fsbrain') && ~isempty(app.nav_camera.etc_render_fsbrain) ...
+    && isstruct(etc_render_fsbrain) && isfield(etc_render_fsbrain,'tr') && isgraphics(etc_render_fsbrain.tr);
 
-%                 if(~isfield(app.nav_camera,'R0') || isempty(app.nav_camera.R0))
-%                     app.nav_camera.R0 = R;
-%                     app.nav_camera.brain_coords = cat(2,etc_render_fsbrain.h.Vertices,ones(size(etc_render_fsbrain.h.Vertices,1),1)).';
-% 
-%                     % set brain-axes limits once, on the axes that actually holds the brain surface
-%                     brain_ax = ancestor(etc_render_fsbrain.h,'axes');
-%                     if(~isempty(brain_ax) && isgraphics(brain_ax))
-%                         set(brain_ax,'xlim',[-100 100],'ylim',[-100 100],'zlim',[-100 100]);
-%                         drawnow;
-%                     end;
-%                 else
-%                     tmp2 = (R / app.nav_camera.R0) * app.nav_camera.brain_coords;   % R*inv(R0)
-%                     etc_render_fsbrain.h.Vertices = tmp2(1:3,:).';
-%                 end;
-
-                if(~isfield(app.nav_camera,'R0') || isempty(app.nav_camera.R0))
-                    app.nav_camera.R0 = R;
-
-                    % centre the brain at its own centroid
-                    V0 = double(etc_render_fsbrain.h.Vertices);
-                    c  = mean(V0,1).';                                   % 3x1 centroid
-                    app.nav_camera.brain_center = c;
-                    %app.nav_camera.brain_coords = cat(2, V0 - c.', ones(size(V0,1),1)).';   % 4xN, centred
-
-                    % auto-scale the axes once around the brain, with room for it to move
-                    r = max(sqrt(sum((V0 - c.').^2,2)));                 % brain radius (mm)
-                    brain_ax = ancestor(etc_render_fsbrain.h,'axes');
-                    if(~isempty(brain_ax) && isgraphics(brain_ax))
-                        set(brain_ax,'xlim',c(1)+[-2 2]*r,'ylim',c(2)+[-2 2]*r,'zlim',c(3)+[-2 2]*r);
-                        %drawnow;
-                    end;
-                    etc_render_fsbrain.tr.Matrix = eye(4);
-                else
-                    c = app.nav_camera.brain_center;
-                    %D    = app.nav_camera.R0 \ R;                        %
-                    %inv(R0)*R: head motion in the head tool's initial
-                    %frame; can give warnings.
-
-
-                    R0 = app.nav_camera.R0;
-                    R0inv = [R0(1:3,1:3).', -R0(1:3,1:3).'*R0(1:3,4); 0 0 0 1];   % exact inverse of a rigid transform
-                    D = R0inv * R;                                                % bottom row is exactly [0 0 0 1]
-
-                    [U,~,V] = svd(D(1:3,1:3));                                    % snap the rotation to the nearest orthonormal matrix
-                    D(1:3,1:3) = U*V.';
-                    D(4,:) = [0 0 0 1];
-
-
-                    etc_render_fsbrain.tr.Matrix = makehgtform('translate',c) * D * makehgtform('translate',-c);
-                    %tmp2 = D * app.nav_camera.brain_coords;              % rotate about brain centre, then translate
-                    %etc_render_fsbrain.h.Vertices = tmp2(1:3,:).' + app.nav_camera.brain_center.';
-                end;
-
-
-       
-            catch ME
-                fprintf('graphic update error: %s\n', ME.message);  
+if(brain_ok && all(isfinite(R(:))) && component_idx==head_tool_idx)
+    try
+        if(has_lm && ~has_reg)
+            if(~isequal(etc_render_fsbrain.tr.Matrix,eye(4)))
+                etc_render_fsbrain.tr.Matrix = eye(4);       % wait for the registration
             end;
+            app.nav_camera.R0 = [];
+        elseif(~isfield(app.nav_camera,'R0') || isempty(app.nav_camera.R0))
+            app.nav_camera.R0 = R;                           % head pose at the start of following
+
+            % centre the axes on the brain, with room for it to move
+            V0 = double(etc_render_fsbrain.h.Vertices);
+            c  = mean(V0,1).';                               % 3x1 centroid
+            app.nav_camera.brain_center = c;
+            r = max(sqrt(sum((V0 - c.').^2,2)));             % brain radius (mm)
+            app.nav_camera.brain_radius = r;
+            app.nav_camera.brain_lim = [c c] + [-2 2]*r;     % 3x2 [min max]; grows if the brain moves out
+            set(app.UIAxes2,'xlim',app.nav_camera.brain_lim(1,:),'ylim',app.nav_camera.brain_lim(2,:),'zlim',app.nav_camera.brain_lim(3,:));
+            etc_render_fsbrain.tr.Matrix = eye(4);
+        else
+            D = rigid_inv(app.nav_camera.R0) * R;            % head motion in the head tool's initial frame
+            if(has_reg)
+                T = app.nav_camera.reg.T;                    % MRI -> head-tracker frame
+                M = rigid_inv(T) * D * T;                    % the same motion, in MRI coordinates
+            else
+                c = app.nav_camera.brain_center;
+                M = makehgtform('translate',c) * D * makehgtform('translate',-c);
+            end;
+            [U,~,V] = svd(M(1:3,1:3));                       % snap to an exact rotation (avoids hgtransform warnings)
+            M(1:3,1:3) = U*V.';
+            M(4,:) = [0 0 0 1];
+            etc_render_fsbrain.tr.Matrix = M;
+
+            % keep the whole brain inside the axes: every vertex stays within brain_radius of the
+            % moved centroid (whatever the rotation), so grow the limits (never shrink, so the view
+            % does not jump around) whenever that sphere would cross the axes box
+            if(isfield(app.nav_camera,'brain_lim') && ~isempty(app.nav_camera.brain_lim))
+                cm  = M * [app.nav_camera.brain_center; 1];
+                need = [cm(1:3) cm(1:3)] + [-1.2 1.2]*app.nav_camera.brain_radius;
+                lim = app.nav_camera.brain_lim;
+                if(any(need(:,1)<lim(:,1)) || any(need(:,2)>lim(:,2)))
+                    span = max(lim(:,2)-lim(:,1));
+                    lim  = [min(lim(:,1),need(:,1)-0.25*span) max(lim(:,2),need(:,2)+0.25*span)];   % grow with spare room
+                    app.nav_camera.brain_lim = lim;
+                    set(app.UIAxes2,'xlim',lim(1,:),'ylim',lim(2,:),'zlim',lim(3,:));
+                end;
+            end;
+        end;
+    catch ME
+        fprintf('graphic update error: %s\n', ME.message);
+    end;
+end;
+
+% registered: show the landmark tool's hot spot in the Brain tab (same frame as the brain display)
+% as a magenta dot -- touch a landmark and the dot should sit on that landmark of the mesh.
+% The dot is hidden whenever the landmark tool is not currently tracked, so it never
+% lingers at a stale position.
+if(isfield(app.nav_camera,'lm_ptr_h') && isgraphics(app.nav_camera.lm_ptr_h) && (~brain_ok || ~has_reg))
+    delete(app.nav_camera.lm_ptr_h);              % registration gone (new landmark file / brain)
+end;
+if(brain_ok && has_reg && isfield(app.nav_camera,'R0') && ~isempty(app.nav_camera.R0))
+    ptr_idx = 2;
+    if(isprop(app,'LandmarkToolDropDown') && isnumeric(app.LandmarkToolDropDown.Value) && ~isempty(app.LandmarkToolDropDown.Value))
+        ptr_idx = app.LandmarkToolDropDown.Value;
+    end;
+    have_dot = isfield(app.nav_camera,'lm_ptr_h') && isgraphics(app.nav_camera.lm_ptr_h);
+    if(component_idx==ptr_idx && ptr_idx~=head_tool_idx && all(isfinite(R(:))))
+        tip = [0;0;0];
+        if(isfield(app.nav_camera,'landmark_tip') && numel(app.nav_camera.landmark_tip)==3)
+            tip = double(app.nav_camera.landmark_tip(:));
+        end;
+        x = rigid_inv(app.nav_camera.reg.T) * rigid_inv(app.nav_camera.R0) * R * [tip;1];
+        if(~have_dot)
+            app.nav_camera.lm_ptr_h = line('Parent',app.UIAxes2,'XData',x(1),'YData',x(2),'ZData',x(3), ...
+                'LineStyle','none','Marker','.','MarkerSize',36,'Color',[1 0 1]);
+        else
+            set(app.nav_camera.lm_ptr_h,'XData',x(1),'YData',x(2),'ZData',x(3),'Visible','on');
+        end;
+    elseif(have_dot)
+        % pointer reported missing (BX2: NaN pose) or not reported for a while (BX) -> hide
+        stale = component_idx==ptr_idx || ~isfield(app.nav_camera,'last_R_t') || numel(app.nav_camera.last_R_t)<ptr_idx ...
+            || toc(app.nav_camera.clock0)-app.nav_camera.last_R_t(ptr_idx)>0.1;
+        if(stale && logical(app.nav_camera.lm_ptr_h.Visible))
+            app.nav_camera.lm_ptr_h.Visible = 'off';
         end;
     end;
 end;
+
+return;
+
+
+function Ri=rigid_inv(R)
+% exact inverse of a rigid 4x4 transform
+Ri=[R(1:3,1:3).', -R(1:3,1:3).'*R(1:3,4); 0 0 0 1];
