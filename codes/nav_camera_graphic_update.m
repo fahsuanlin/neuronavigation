@@ -144,6 +144,7 @@ if(isfield(app.nav_camera,'ref_p') && size(app.nav_camera.ref_p,2)>=component_id
     if(~isfield(app.nav_camera,'ref_table_t') || toc(app.nav_camera.ref_table_t)>0.2)
         app.nav_camera.ref_table_t=tic;
         nav_camera_mark_ref(app,'update_table');
+        nav_camera_tool_comm(app,'send');   % stream the selected tool's offset to the robot PC (if 'Comm.' is on)
     end;
 end;
 
