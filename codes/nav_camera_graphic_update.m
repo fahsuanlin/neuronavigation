@@ -131,6 +131,11 @@ end;
 app.nav_camera.last_R(:,:,component_idx)=R;
 app.nav_camera.last_R_t(component_idx)=toc(app.nav_camera.clock0);
 
+% Robot tab: marker readout, marker - target table, 3D dots, DELTA to the robot PC
+if(isprop(app,'RobotTab') && isfield(app.nav_camera,'robot_marker_idx'))
+    nav_robot_tab(app,'frame',component_idx,p);
+end;
+
 % landmark sampling in progress -> hand this pose to the sampler
 if(isfield(app.nav_camera,'landmark_sampling') && ~isempty(app.nav_camera.landmark_sampling))
     nav_brain_landmark(app,'sample_frame',R,component_idx);
@@ -144,7 +149,6 @@ if(isfield(app.nav_camera,'ref_p') && size(app.nav_camera.ref_p,2)>=component_id
     if(~isfield(app.nav_camera,'ref_table_t') || toc(app.nav_camera.ref_table_t)>0.2)
         app.nav_camera.ref_table_t=tic;
         nav_camera_mark_ref(app,'update_table');
-        nav_camera_tool_comm(app,'send');   % stream the selected tool's offset to the robot PC (if 'Comm.' is on)
     end;
 end;
 
