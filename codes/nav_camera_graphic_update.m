@@ -131,8 +131,11 @@ end;
 app.nav_camera.last_R(:,:,component_idx)=R;
 app.nav_camera.last_R_t(component_idx)=toc(app.nav_camera.clock0);
 
-% Robot tab: marker readout, marker - target table, 3D dots, DELTA to the robot PC
-if(isprop(app,'RobotTab') && isfield(app.nav_camera,'robot_marker_idx'))
+% Robot tab: marker readout, marker - target table, 3D dots, DELTA to the robot PC.
+% 'ensure' sets the tab up and fills its Marker list from the tools found by Tool check,
+% so it does not depend on hook lines inside the .mlapp.
+if(isprop(app,'RobotTab'))
+    nav_robot_tab(app,'ensure');
     nav_robot_tab(app,'frame',component_idx,p);
 end;
 

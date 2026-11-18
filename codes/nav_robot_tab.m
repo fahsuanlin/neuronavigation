@@ -3,6 +3,11 @@ function nav_robot_tab(app,action,varargin)
 %   nav_robot_tab    the 'Robot' tab of nav_camera_terminal
 %
 %   nav_robot_tab(app,'init')                 startupFcn: style the tab, read-only marker fields, empty state
+%   nav_robot_tab(app,'ensure')               from nav_camera_graphic_update on every frame: runs 'init' and
+%                                             wires the Robot tab callbacks if that has not happened, and
+%                                             refills MarkerDropDown when the tool list changes. The tab
+%                                             therefore works even if the .mlapp lost its hook lines
+%                                             (App Designer saves an older copy over outside edits).
 %   nav_robot_tab(app,'populate')             after Tool check: fill app.MarkerDropDown with the tools
 %   nav_robot_tab(app,'marker_changed')       MarkerDropDown callback: reset marker readout and its 3D dot
 %   nav_robot_tab(app,'target_changed')       TargetX/Y/ZEditField callback: (re)define the target point
@@ -42,7 +47,26 @@ if(nargin<2 || isempty(action))
 end;
 
 switch lower(action)
+    case 'ensure'
+        if(~isfield(app.nav_camera,'robot_tab_ready') || ~app.nav_camera.robot_tab_ready)
+            nav_robot_tab(app,'init');
+        end;
+        if(isfield(app.nav_camera,'tool') && ~isempty(app.nav_camera.tool))
+            names=string({app.nav_camera.tool.name});
+            if(~isequal(names,app.nav_camera.robot_tool_names))
+                nav_robot_tab(app,'populate');   % new Tool check result
+            end;
+        end;
+
     case 'init'
+        app.nav_camera.robot_tab_ready=true;
+        app.nav_camera.robot_tool_names=strings(1,0);
+        % wire the callbacks here as well, so they work even when the .mlapp stubs are empty
+        app.MarkerDropDown.ValueChangedFcn=@(src,event) nav_robot_tab(app,'marker_changed');
+        app.TargetXEditField.ValueChangedFcn=@(src,event) nav_robot_tab(app,'target_changed');
+        app.TargetYEditField.ValueChangedFcn=@(src,event) nav_robot_tab(app,'target_changed');
+        app.TargetZEditField.ValueChangedFcn=@(src,event) nav_robot_tab(app,'target_changed');
+        app.RobotCommButton.ButtonPushedFcn=@(src,event) nav_camera_tool_comm(app,'toggle');
         app.nav_camera.robot_marker_idx=[];
         app.nav_camera.robot_target=nan(3,1);
         app.nav_camera.robot_marker_h=gobjects(0);
@@ -90,8 +114,12 @@ switch lower(action)
         if(~isfield(app.nav_camera,'tool') || isempty(app.nav_camera.tool))
             return;
         end;
+        if(~isfield(app.nav_camera,'robot_tab_ready') || ~app.nav_camera.robot_tab_ready)
+            nav_robot_tab(app,'init');
+        end;
         old=app.nav_camera.robot_marker_idx;
-        app.MarkerDropDown.Items=string({app.nav_camera.tool.name});
+        app.nav_camera.robot_tool_names=string({app.nav_camera.tool.name});
+        app.MarkerDropDown.Items=app.nav_camera.robot_tool_names;
         app.MarkerDropDown.ItemsData=1:length(app.nav_camera.tool);
         if(~isempty(old) && old<=length(app.nav_camera.tool))
             app.MarkerDropDown.Value=old;

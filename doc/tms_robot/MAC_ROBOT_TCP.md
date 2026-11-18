@@ -386,8 +386,12 @@ and `writeline`, which are available since R2020b.
 **Robot tab components** (App Designer names): `MarkerDropDown`, `MarkerX/Y/ZEditField` (read-only),
 `TargetX/Y/ZEditField`, `TargetUITable` (dx, dy, dz, d), `RobotCommButton`, `RobotCommTextArea`, `RobotUIAxes`.
 
-> Editing the app: the callback bodies live in the .mlapp. If App Designer has the file open, saving
-> there overwrites changes made to the file from outside. Close it first or reload it.
+> **Self-wiring:** on every camera frame, `nav_camera_graphic_update` calls `nav_robot_tab(app,'ensure')`.
+> That runs `'init'` once, connects the Robot tab callbacks (MarkerDropDown, Target fields,
+> RobotCommButton, window close) in code, and refills `MarkerDropDown` whenever the tool list
+> from Tool check changes. The tab therefore works even when the .mlapp has none of the hook lines,
+> which happens because App Designer saves an older open copy over outside edits. Until the first
+> frame arrives (BX/BX2 streaming), the dropdown still shows App Designer's default items.
 
 ### 11.2 User workflow (Robot tab)
 1. On the Control tab, connect the camera and press **Tool check**. This fills `MarkerDropDown`.
@@ -604,3 +608,4 @@ clear c
 | 2026-11-17 | Mac: `'set'` action, ERR BUSY handling, simulator updated to match. This document written. |
 | 2026-11-18 | Mac en23 address changed to 169.254.240.129; link re-verified (robot docs unchanged). Simulator fixes: motion stalled at low speeds (fractional steps were dropped), and quantization is now anchored at the start value like the VI (THETA −85 → −84 gives −84.0533). `'set'` with a bad axis or value reports and sends nothing instead of throwing. Tested in MATLAB R2022b: 6/6 DELTA acked by both servers; SET → `ERR BUSY operator has control` handled. |
 | 2026-11-18 | App: new **Robot** tab (`nav_robot_tab.m`) with marker readout, target, marker − target table, 3D dots and a comm log. DELTA now carries marker − target (was the Mark ref offset). Replies are buffered by complete line. |
+| 2026-11-18 | Robot tab made self-wiring from the tracking loop (App Designer saves kept removing the hook lines from the .mlapp). |
