@@ -1,6 +1,6 @@
 # Starting the TMS Robot Bridge on the Windows PC
 
-The **TMS Robot Bridge** (`TMS_Robot/TMS_Robot_Code/tcp/pc_bridge/tms_bridge.py`) is a Python program that runs
+The **TMS Robot Bridge** (`TMS_Robot/bridge/tms_bridge.py`) is a Python program that runs
 on the Windows PC. It connects the Mac's navigation terminal to the LabVIEW Main VI on the myRIO and relays between them.
 
 ```
@@ -8,16 +8,16 @@ Mac (MATLAB, nav_camera_terminal) ── text ──▶ tms_bridge.py (Windows P
                          169.254.30.121:6340 (en23 cable)          172.22.11.2:6340 (USB)
 ```
 
-- **Mac side:** text protocol v1 (`doc/tms_robot/PROTOCOL.md`): `GET STATUS`, `SET <axis> <value>`, `DELTA`, `PING`, …
-- **LabVIEW side:** the Main VI's binary interface, the same one `codes/TMS_MATLAB_Controller/TMS_Start.m` uses:
+- **Mac side:** text protocol v1 ([`PROTOCOL.md`](PROTOCOL.md)): `GET STATUS`, `SET <axis> <value>`, `DELTA`, `PING`, …
+- **LabVIEW side:** the Main VI's binary interface, the same one `TMS_Robot/matlab_controller/TMS_Start.m` uses:
   72-byte command packets out (18 big-endian float32), 44-byte frames in every ~100 ms (11 float32).
 
 The Mac cannot reach the myRIO (it is on USB to the Windows PC), so the bridge is required.
 
 ## 1. One-time setup
 
-1. **Get the files.** Clone or pull this repository on the Windows PC (branch `robot-tab`), or copy the folder
-   `TMS_Robot/TMS_Robot_Code/tcp/pc_bridge/` (`tms_bridge.py`, `run_bridge.bat`, `build_exe.bat`).
+1. **Get the files.** Clone or pull this repository on the Windows PC (branch `main`), or copy the folder
+   `TMS_Robot/bridge/` (`tms_bridge.py`, `run_bridge.bat`, `build_exe.bat`).
 2. **Python 3.8 or newer.** In a Command Prompt, run `py --version`. If it is not found, install Python 3 from
    python.org and tick *Add python.exe to PATH*. The bridge uses only the standard library (no `pip install`).
 3. **Firewall.** Open TCP port 6340 for the Mac. In PowerShell **as Administrator**, run once:
@@ -26,7 +26,7 @@ The Mac cannot reach the myRIO (it is on USB to the Windows PC), so the bridge i
    ```
    Without this rule, the Mac's connection times out.
 4. *(Optional)* **Single .exe.** Run `build_exe.bat` once. It builds `dist\tms_bridge.exe` with PyInstaller.
-   The .exe runs on PCs without Python. For `GET DOC`, copy `BRIEF.md`, `PROTOCOL.md` and `GUIDE.md` into
+   The .exe runs on PCs without Python. For `GET DOC`, copy `TMS_Robot\README.md`, `doc\PROTOCOL.md` and `doc\WINDOWS_BRIDGE.md` into
    `dist\docs\`.
 
 ## 2. Each session
@@ -39,7 +39,7 @@ The Mac cannot reach the myRIO (it is on USB to the Windows PC), so the bridge i
    program connected to 172.22.11.2:6340. Also stop `robot_sim_server.py` if it is running, because it uses port 6340 on this PC.
 3. **Start the bridge**, either:
    - double-click `run_bridge.bat`, or
-   - in a Command Prompt in the `pc_bridge` folder:
+   - in a Command Prompt in the `TMS_Robot\bridge` folder:
      ```
      py tms_bridge.py
      ```
@@ -64,7 +64,7 @@ Close the window to stop the bridge. Closing it does **not** stop the motors: us
 | Option | Default | Meaning |
 |---|---|---|
 | `--robot HOST:PORT` | `172.22.11.2:6340` | LabVIEW Main VI address. `--robot sim` uses a built-in simulated robot instead. |
-| `--robot-proto binary\|text` | `binary` | `binary` = Main VI 72B/44B interface; `text` = protocol v1 text lines (`GUIDE.md` VI loop). |
+| `--robot-proto binary\|text` | `binary` | `binary` = Main VI 72B/44B interface; `text` = protocol v1 text lines (a VI text loop, never built). |
 | `--speed S` | `4` | X/Y/Z/PSI speed in steps/s, sent in every packet (binary). |
 | `--curve-speed S` | `4` | THETA/PHI speed in steps/s (binary). |
 | `--init X,Y,Z,PSI,THETA,PHI` | | Only for a VI that sends no status before its first command: start targets, e.g. `0,0,0,0,0,0`. Must match the robot: the first `SET` sends all six. Not needed with the current VI (it sends status on its own after a fresh start). Once frames arrive, the VI's values replace these. |
@@ -72,13 +72,13 @@ Close the window to stop the bridge. Closing it does **not** stop the motors: us
 | `--remote` | off | Start with *Allow motion from Mac* ticked. |
 | `--nogui` | off | Console only, no window. |
 | `-v` | off | Log every Mac request except DELTA and PING. |
-| `--docs DIR` | | Folder with BRIEF/PROTOCOL/GUIDE.md for `GET DOC`. |
+| `--docs DIR` | | Extra folder with README.md / PROTOCOL.md / WINDOWS_BRIDGE.md for `GET DOC` (default: found in the repository). |
 
 ## 4. Without the robot
 
 - **Built-in simulator:** `py tms_bridge.py --robot sim`. The Mac can test everything, including Goto.
 - **VI binary stand-in** (tests the binary path): in one window
-  `py ..\robot_simulator\lv_binary_sim.py --port 6341`, in another `py tms_bridge.py --robot 127.0.0.1:6341`.
+  `py ..\simulators\lv_binary_sim.py --port 6341`, in another `py tms_bridge.py --robot 127.0.0.1:6341`.
 
 ## 5. What the bridge does with each Mac command (binary mode)
 
