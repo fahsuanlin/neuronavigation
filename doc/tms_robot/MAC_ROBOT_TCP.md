@@ -12,7 +12,7 @@ by LabVIEW on the Windows PC.
 | Other robot-side docs | [`BRIEF.md`](BRIEF.md) (status and notes for the Mac), [`GUIDE.md`](GUIDE.md) (LabVIEW implementation) |
 | Mac code | `codes/nav_camera_tool_comm.m`, `codes/nav_camera_graphic_update.m`, `codes/nav_camera_terminal.mlapp` |
 | Simulator | `codes/tms_robot_sim.py` |
-| Last updated | 2026-11-18 (Robot tab) |
+| Last updated | 2026-11-24 (Windows bridge live with the real robot; first moves from the Mac) |
 
 The three robot-side docs are copies of what the server returns for `GET DOC BRIEF|PROTOCOL|GUIDE`.
 Re-fetch them whenever the robot side announces a change (see [§12.4](#124-refresh-the-robot-side-docs)).
@@ -512,22 +512,30 @@ The callbacks are set in `nav_robot_tab(app,'init')`, like the other Robot tab c
 
 ## 12. Robot implementation (LabVIEW / simulators)
 
-### 12.1 Real robot (planned)
-`TMS Robot_adjust.vi` on the NI myRIO gets one extra While Loop: `TCP Listen` on 6340, `TCP Read` in
-CRLF mode, a case structure on the command, and replies via `TCP Write`. The full design is in
-[`GUIDE.md`](GUIDE.md). Key points:
-- `SET` writes the same front-panel controls (`User Input x`, …) the operator uses. The Forward/Backward
-  buttons only nudge those targets, so no button presses are needed.
-- `DELTA` only writes the `Delta dx/dy/dz/d` indicators.
-- A front-panel **Remote** switch (default OFF) decides who drives the motion. When it is OFF, `SET` → `ERR BUSY operator has control`.
-- The myRIO is reachable only over USB (`172.22.11.2`), so the Windows PC runs the **TMS Robot Bridge**
-  `TMS_Robot/TMS_Robot_Code/tcp/pc_bridge/tms_bridge.py` (2026-11-19, replaces the plain `tcp_bridge.py`).
-  It serves protocol v1 to the Mac on 6340 and keeps one connection to the VI. It answers
-  PING/HELP/DELTA/GET DELTA/GET DOC itself and forwards GET STATUS and SET. It has an *Allow motion from Mac* switch
-  (off → `ERR BUSY operator has control`), refuses STOP, and shows a monitor window. `--robot sim` uses a built-in
-  robot model until the VI loop exists. Its greeting is `HELLO TMS-ROBOT 1 bridge (robot connected|NOT connected)`.
-  When LabVIEW is down, `GET STATUS`/`SET` → `ERR BUSY robot not connected (...)`. See `TMS_Robot/TMS_Robot_Code/README.md`.
-- **Not live yet.** The robot side will announce when port 6340 switches from the simulator to the bridge.
+### 12.1 Real robot (live since 2026-11-24)
+```
+Mac (MATLAB) ── text v1 ──▶ TMS Robot Bridge (Windows PC) ── binary 72B/44B ──▶ LabVIEW Main VI (myRIO)
+            169.254.30.121:6340                            172.22.11.2:6340 (USB)
+```
+- The myRIO is reachable only over USB, so the Windows PC runs the **TMS Robot Bridge**
+  `TMS_Robot/TMS_Robot_Code/tcp/pc_bridge/tms_bridge.py`. It serves protocol v1 to the Mac on 6340 (the Mac code is
+  unchanged), answers PING/HELP/DELTA/GET DELTA/GET DOC itself, and translates GET STATUS and SET for the VI.
+  It has an *Allow motion from Mac* switch (off at every start → `ERR BUSY operator has control`), refuses STOP, and
+  shows a monitor window with a status history. Greeting: `HELLO TMS-ROBOT 1 bridge (robot connected|NOT connected)`.
+  When LabVIEW is down, `GET STATUS`/`SET` → `ERR BUSY robot not connected (...)`.
+- **The VI does not speak text v1.** It uses the binary interface of `codes/TMS_MATLAB_Controller/TMS_Start.m`
+  (the robot side's own MATLAB controller, which talks to the VI directly from the Windows PC):
+  - VI ← 72 bytes = 18 big-endian float32 `[x_speed x_pos 0 y_speed y_pos 0 z_speed z_pos 0 psi_speed psi_pos 0
+    tab_mode curve_speed theta_pos 0 phi_pos 0]` (the 0s are jog). tab_mode 0 = THETA, 1 = PHI.
+  - VI → 44 bytes every ~100 ms = 11 float32 `[x_mov x y_mov y z_mov z psi_mov psi curve_mov theta phi]`,
+    moving **1 = idle**.
+- How the bridge maps v1 onto it, and how the real VI behaves (values are targets, moving flag ~1 s late, VI restart
+  needed after a disconnect), are in [`WINDOWS_BRIDGE.md`](WINDOWS_BRIDGE.md) §5 and §7. For the Mac this means:
+  STATUS positions are targets; `SET L/R` → `ERR BAD_AXIS`; DELTA is acked and kept on the bridge only.
+- Start-up steps on Windows: [`WINDOWS_BRIDGE.md`](WINDOWS_BRIDGE.md). The text-v1 VI loop in [`GUIDE.md`](GUIDE.md)
+  was not built; the bridge still supports it with `--robot-proto text`.
+- Test stand-in for the VI: `TMS_Robot/TMS_Robot_Code/tcp/robot_simulator/lv_binary_sim.py` (reports targets and
+  starts motion 1 s late, like the real VI).
 
 ### 12.2 Robot-side Python simulator (on the Windows PC)
 This is what currently answers on `169.254.30.121:6340`. It implements protocol v1, including DELTA,
@@ -645,7 +653,8 @@ clear c
 - PHI units: not verified.
 - Mapping DELTA (camera frame) to robot axes: not designed. Any closed-loop use needs a calibration
   between the Polaris frame and the robot frame, plus an explicit safety review.
-- The real robot (myRIO + bridge) is not live yet.
+- Real robot: single X moves from the Mac verified on 2026-11-24. Y/Z/PSI/THETA/PHI moves, CALIBRATE and Goto
+  not yet run on the real robot. The VI's TCP loop must be restarted after each disconnect (to be fixed on the VI).
 
 ### Change log
 | Date | Change |
@@ -660,3 +669,4 @@ clear c
 | 2026-11-19 | **Goto** button (`nav_robot_goto.m`: closed loop with auto-calibrated camera↔robot Jacobian) and manual **cmd./param** commands. Comm layer: quiet requests, STATUS parsing (`robot_status`), SET refusals recorded (`robot_set_err`), prefix reply matching, multi-line `GET DOC`. Fix: a request is queued *before* `writeline`. Before, a reply read by another timer callback during the write found no pending request, and all later replies were mismatched. Tested in R2022b against the simulator with a rotated/flipped camera frame: 0.08–0.16 mm in 2–3 moves; out-of-reach and abort cases; 113/113 DELTA acked. |
 | 2026-11-19 | `CALIBRATE <step mm>` command in cmd./param: only the camera↔robot calibration, then back to the start, result kept for Goto. Simulator: J within 0.06 of the true mapping; the next Goto skipped calibration and reached 0.23 mm in 2 moves. |
 | 2026-11-19 | Windows side: **TMS Robot Bridge** `tms_bridge.py` (standalone, tkinter monitor, Remote switch, STOP blocked, built-in sim). Tested on the Mac: protocol cases (one client, idle drop, DELTA rules, GET DOC framing, LabVIEW down/up auto-reconnect), and MATLAB CALIBRATE + Goto through the bridge unchanged (27/27 DELTA acked, 0.32 mm). Not yet run on Windows. Mac: ERR BUSY on SET now shows the server's reason. |
+| 2026-11-24 | Windows bridge **live with the real robot.** The VI turned out to use the binary 72B/44B interface of `codes/TMS_MATLAB_Controller` (added to the repo), so the bridge got a binary LabVIEW link (default; text v1 kept as `--robot-proto text`) and `lv_binary_sim.py`. Real-robot findings: VI values are targets, moving flag rises ~1 s after a packet, start state all 0, VI TCP loop stops after a disconnect. Bridge fixes: stay connected when the VI is silent; `--init` start targets; adopt the VI's targets for axes it is not moving (a first `SET X 0.5` had sent Y 3 → 0, overwriting a panel value); done = moving flag rose and fell; status history in the log. Verified: `SET X 0.5` / `SET X 0` done at 4.3 / 4.1 s, other axes unchanged. Guide: [`WINDOWS_BRIDGE.md`](WINDOWS_BRIDGE.md). |

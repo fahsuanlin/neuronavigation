@@ -60,7 +60,7 @@ Mac (MATLAB) --TCP 169.254.30.121:6340--> tms_bridge --TCP 172.22.11.2:6340--> L
   `ERR BUSY robot not connected`.
 - **Safety**: *Allow motion from Mac* is off by default. While it is off, `SET` returns `ERR BUSY operator has control`
   (the Mac's Goto/CALIBRATE stop cleanly). `STOP` from the network is always refused unless the bridge was started with `--allow-stop`.
-- **LabVIEW side** (default `--robot-proto binary`): the Main VI's binary interface, the same one
+- **LabVIEW side** (default `--robot-proto binary`, live with the real robot since 2026-11-24): the Main VI's binary interface, the same one
   `codes/TMS_MATLAB_Controller/TMS_Start.m` uses. The bridge sends a 72-byte packet (18 big-endian float32:
   speed/position/jog per axis, tab mode, curve speed, theta, phi) on each `SET` and reads the 44-byte frames
   (11 float32: moving flag and value per axis, 1 = idle) that the VI sends every ~100 ms. `GET STATUS` is built
@@ -72,6 +72,8 @@ Mac (MATLAB) --TCP 169.254.30.121:6340--> tms_bridge --TCP 172.22.11.2:6340--> L
   x/y/z/psi/theta/phi (orange while moving), optical sensors, round trip time, newest-first log,
   *Disconnect Mac* and *Reconnect* buttons.
 
+Full start-up guide, real-VI behaviour and the 2026-11-24 session log: `doc/tms_robot/WINDOWS_BRIDGE.md`.
+Restart the VI after every bridge restart (its TCP loop stops when the client disconnects).
 Start: stop `robot_sim_server.py` and close `TMS_Start` (MATLAB) first: port 6340 here, and the VI takes one
 client. Then `py tms_bridge.py` (myRIO at 172.22.11.2:6340). Without the robot: `python3
 tcp/robot_simulator/lv_binary_sim.py --port 6341` and `py tms_bridge.py --robot 127.0.0.1:6341`. Options: `--remote`, `--poll Hz`, `--listen`, `--docs`, `--nogui`, `-v`.
