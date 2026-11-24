@@ -396,9 +396,23 @@ class BinaryRobotLink:
             self.core.log("*", f"LabVIEW connected: {h}:{p} (binary 72B/44B interface)")
             buf = b""
             t_last = None
+            t_conn = time.monotonic()
+            warned = False
             try:
                 while not self.stop_ev.is_set():
-                    chunk = s.recv(4096)
+                    try:
+                        chunk = s.recv(4096)
+                    except socket.timeout:
+                        # silence is not a broken link: stay connected (reconnecting churns the VI's listener)
+                        quiet = time.monotonic() - (self.status_t if t_last else t_conn)
+                        self.state = (f"connected to {h}:{p}, no 44-byte frame for {quiet:.0f} s"
+                                      + ("" if t_last else " (the VI may wait for a first 72-byte packet)"))
+                        if not warned:
+                            self.core.log("!", f"LabVIEW: connected but no 44-byte frame for {quiet:.0f} s"
+                                          + ("" if t_last else "; the VI may send frames only after it gets a 72-byte packet"))
+                            warned = True
+                        continue
+                    warned = False
                     if not chunk:
                         raise OSError("closed by LabVIEW")
                     buf += chunk
