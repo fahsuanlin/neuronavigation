@@ -23,8 +23,8 @@ function varargout=nav_camera_tool_comm(app,action,varargin)
 %   nav_camera_tool_comm(app,'close')             send BYE and close the connection
 %   nav_camera_tool_comm(app,'close_app')         figure CloseRequestFcn: 'close', then delete the app
 %
-%   Protocol: TMS-robot protocol v1, doc/tms_robot/PROTOCOL.md (contract) and
-%   doc/tms_robot/MAC_ROBOT_TCP.md (Mac side). ASCII lines ending CRLF, one
+%   Protocol: TMS-robot protocol v1, TMS_Robot/doc/PROTOCOL.md (contract) and
+%   TMS_Robot/doc/MAC_ROBOT_TCP.md (Mac side). ASCII lines ending CRLF, one
 %   reply line per request, server greets 'HELLO TMS-ROBOT 1 ...'.
 %
 %       DELTA <dx> <dy> <dz> <d>    ->  OK DELTA <the same four tokens>   (stored on the robot side, no motion)
@@ -42,7 +42,7 @@ function varargout=nav_camera_tool_comm(app,action,varargin)
 %   keepalive_s seconds. Never sends STOP.
 %
 %   Robot PC address: 169.254.30.121:6340 by default; for the simulator
-%   (codes/tms_robot_sim.py) run setenv('TMS_ROBOT_HOST','127.0.0.1') first.
+%   (TMS_Robot/simulators/tms_robot_sim.py) run setenv('TMS_ROBOT_HOST','127.0.0.1') first.
 %
 % fhlin@Nov 17, 2026 (Robot tab: Nov 18, 2026)
 %

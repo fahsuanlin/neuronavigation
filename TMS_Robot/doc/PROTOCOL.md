@@ -27,7 +27,7 @@ HELLO TMS-ROBOT 1
 | Request | Meaning | Maps to front-panel item |
 |---|---|---|
 | `HELP` | one-line summary of all commands | – |
-| `GET DOC <BRIEF\|PROTOCOL\|GUIDE>` | reply `DOC <name> <nbytes>\r\n` then exactly `<nbytes>` raw UTF-8 bytes (the only multi-line reply) | – |
+| `GET DOC <BRIEF\|PROTOCOL\|GUIDE>` | reply `DOC <name> <nbytes>\r\n` then exactly `<nbytes>` raw UTF-8 bytes (the only multi-line reply). On the bridge: BRIEF = `TMS_Robot/README.md`, PROTOCOL = this file, GUIDE = `WINDOWS_BRIDGE.md`. | – |
 | `HELLO ...` | optional client greeting; replied with `OK HELLO TMS-ROBOT 1` | – |
 | `PING` | liveness check | – |
 | `DELTA <dx> <dy> <dz> <d>` | Polaris tracker offset of the tool from the reference, in mm (camera display frame: dx right, dy up, dz distance from camera; d = √(dx²+dy²+dz²)). **Stored/displayed only. Never moves the robot.** About 5 Hz while the tool is visible. Reply `OK DELTA` echoes the four tokens exactly as received. Not 4 finite numbers, or d < 0 → `ERR BAD_ARGS`. | new indicators `Delta dx/dy/dz/d` |

@@ -3,7 +3,7 @@
 tms_robot_sim.py -- stand-in for the TMS-robot TCP server (protocol v1)
 
 Lets nav_camera_terminal (nav_camera_tool_comm.m) be developed without the
-Windows/LabVIEW PC. Follows the contract in doc/tms_robot/PROTOCOL.md (fetched
+Windows/LabVIEW PC. Follows the contract in TMS_Robot/doc/PROTOCOL.md (fetched
 from the robot with GET DOC PROTOCOL on Nov 17 2026):
 
   on connect      -> HELLO TMS-ROBOT 1
@@ -62,7 +62,11 @@ THETA_PER_STEP = 10800 / (21788 * math.pi)  # ~0.15778
 PHI_PER_STEP = THETA_PER_STEP             # PHI units not verified on the robot side; assume the same
 LIMIT_MM = 25.0
 IDLE_TIMEOUT_S = 10.0
-DOC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "doc", "tms_robot")
+HERE = os.path.dirname(os.path.abspath(__file__))
+# GET DOC names (protocol v1) -> files, as on the bridge: BRIEF = TMS_Robot/README.md, PROTOCOL, GUIDE = bridge guide
+DOC_FILES = dict(BRIEF=os.path.join(HERE, "..", "README.md"),
+                 PROTOCOL=os.path.join(HERE, "..", "doc", "PROTOCOL.md"),
+                 GUIDE=os.path.join(HERE, "..", "doc", "WINDOWS_BRIDGE.md"))
 
 HELP = ("OK HELP protocol v1, ASCII lines ending CRLF, one reply per request | PING -> OK PONG | "
         "GET STATUS -> STATUS k=v;k=v... | SET <X|Y|Z|PSI> <mm -25..25> | SET <THETA|PHI> <value> (absolute targets) | "
@@ -142,7 +146,7 @@ class Robot:
 
 
 def read_doc(name):
-    path = os.path.join(DOC_DIR, f"{name}.md")
+    path = DOC_FILES[name]
     try:
         with open(path, "rb") as fh:
             return fh.read()

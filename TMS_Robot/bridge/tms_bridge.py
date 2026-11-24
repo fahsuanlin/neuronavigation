@@ -8,7 +8,7 @@ terminal, nav_camera_terminal) and the LabVIEW robot program (TMS Robot_adjust.v
                                          STOP blocked, DELTA store
 
 Mac side: listens on --listen (default 0.0.0.0:6340) and speaks TMS-robot protocol v1
-(doc/tms_robot/PROTOCOL.md) exactly, so the Mac code needs no change:
+(TMS_Robot/doc/PROTOCOL.md) exactly, so the Mac code needs no change:
     greeting HELLO TMS-ROBOT 1 bridge ...; one client at a time (others: ERR BUSY); 10 s idle -> disconnect
     answered by the bridge itself : PING, HELLO, HELP, BYE, GET DOC <name>, GET DELTA,
                                     DELTA <dx> <dy> <dz> <d> (validated, acked with the echo, stored, and the
@@ -19,15 +19,15 @@ Mac side: listens on --listen (default 0.0.0.0:6340) and speaks TMS-robot protoc
                                     STOP -> ERR BUSY (it would end the robot program); --allow-stop to permit
 
 LabVIEW side (--robot HOST:PORT, default 172.22.11.2:6340 = myRIO over USB), one persistent client connection:
-  --robot-proto binary (default): the Main VI's binary interface, the same one codes/TMS_MATLAB_Controller
+  --robot-proto binary (default): the Main VI's binary interface, the same one TMS_Robot/matlab_controller
       uses: 72-byte command packets (18 big-endian float32) out, 44-byte frames (11 float32) in every ~100 ms.
       GET STATUS is answered from the newest frame; SET <X|Y|Z|PSI|THETA|PHI> updates one target and sends a
       full packet (targets start from the first frame, so connecting sends nothing and moves nothing).
       No L/R steps, no DELTA forwarding (DELTA is kept on the bridge for GET DELTA).
-  --robot-proto text: protocol v1 text lines to a VI TCP loop as in doc/tms_robot/GUIDE.md.
+  --robot-proto text: protocol v1 text lines to a VI TCP loop (design in TMS_Robot/doc/archive, never built).
 Reconnects every 2 s when the link is down.
 --robot sim : built-in simulated robot (4 steps/s, 26 steps/mm, THETA -85, PHI 53.1916).
-Test the binary path without the robot: tcp/robot_simulator/lv_binary_sim.py --port 6341, then
+Test the binary path without the robot: TMS_Robot/simulators/lv_binary_sim.py --port 6341, then
     py tms_bridge.py --robot 127.0.0.1:6341
 
 Usage (Windows, Python 3.8+, standard library only):
@@ -96,7 +96,7 @@ def parse_status(line):
 # LabVIEW side
 # ======================================================================================
 class SimRobot:
-    """Built-in robot model (same behaviour as codes/tms_robot_sim.py): step-based motion, the reported
+    """Built-in robot model (same behaviour as TMS_Robot/simulators/tms_robot_sim.py): step-based motion, the reported
     value is the quantized target, the m* flags show motion."""
     MM = 2 / 52
     ANG = 10800 / (21788 * math.pi)
@@ -308,7 +308,7 @@ class RobotLink:
 
 
 class BinaryRobotLink:
-    """LabVIEW Main VI binary interface (codes/TMS_MATLAB_Controller, README.txt):
+    """LabVIEW Main VI binary interface (TMS_Robot/matlab_controller, README.txt):
         bridge -> VI : 72 bytes = 18 big-endian float32
                        [x_speed x_pos 0  y_speed y_pos 0  z_speed z_pos 0  psi_speed psi_pos 0
                         tab_mode curve_speed theta_pos 0  phi_pos 0]        (the 0s are Jog, never used)
@@ -684,10 +684,12 @@ class Core:
         else:
             self.robot = RobotLink(self, args.robot, args.poll)
         self.mac = MacServer(self, args.listen)
+        # GET DOC names (protocol v1) -> files: BRIEF = sub-project overview, PROTOCOL = contract, GUIDE = bridge guide
+        self.doc_files = dict(BRIEF="README.md", PROTOCOL="PROTOCOL.md", GUIDE="WINDOWS_BRIDGE.md")
         self.doc_dirs = [d for d in (args.docs,
-                                     os.path.join(SCRIPT_DIR, "docs"),
-                                     os.path.join(SCRIPT_DIR, "..", "..", "..", "..", "doc", "tms_robot"),
-                                     os.path.join(SCRIPT_DIR, "..")) if d]
+                                     os.path.join(SCRIPT_DIR, "docs"),             # next to a built .exe
+                                     os.path.join(SCRIPT_DIR, "..", "doc"),        # TMS_Robot/doc
+                                     os.path.join(SCRIPT_DIR, "..")) if d]         # TMS_Robot (README.md)
 
     def log(self, kind, text):
         line = f"{time.strftime('%H:%M:%S')} {kind} {text}"
@@ -701,12 +703,13 @@ class Core:
                                                   "BLOCKED (SET -> ERR BUSY operator has control)"))
 
     def read_doc(self, name):
+        fn = self.doc_files[name]
         for d in self.doc_dirs:
-            p = os.path.join(d, f"{name}.md")
+            p = os.path.join(d, fn)
             if os.path.isfile(p):
                 with open(p, "rb") as fh:
                     return fh.read()
-        return f"# {name}\n\n(not found on the bridge; looked in: {', '.join(self.doc_dirs)})\n".encode()
+        return f"# {name}\n\n({fn} not found on the bridge; looked in: {', '.join(self.doc_dirs)})\n".encode()
 
     def handle(self, line):
         """one request line from the Mac -> (reply bytes, action)"""
@@ -898,7 +901,7 @@ def main():
     ap.add_argument("--robot", default="172.22.11.2:6340",
                     help="LabVIEW VI TCP loop host:port (default myRIO 172.22.11.2:6340), or 'sim'")
     ap.add_argument("--robot-proto", choices=("binary", "text"), default="binary",
-                    help="LabVIEW interface: binary = Main VI 72B/44B (TMS_MATLAB_Controller), text = protocol v1 lines")
+                    help="LabVIEW interface: binary = Main VI 72B/44B (matlab_controller), text = protocol v1 lines")
     ap.add_argument("--speed", type=float, default=4.0, help="binary: X/Y/Z/PSI speed sent with every packet (steps/s)")
     ap.add_argument("--curve-speed", type=float, default=4.0, help="binary: THETA/PHI curve speed (steps/s)")
     ap.add_argument("--init", default=None, metavar="X,Y,Z,PSI,THETA,PHI",
@@ -908,7 +911,7 @@ def main():
     ap.add_argument("--sim-speed", type=float, default=4.0, help="motor speed of --robot sim (steps/s; 4 = panel default)")
     ap.add_argument("--remote", action="store_true", help="start with 'Allow motion from Mac' on")
     ap.add_argument("--allow-stop", action="store_true", help="forward STOP from the Mac (ends the robot program!)")
-    ap.add_argument("--docs", default=None, help="folder with BRIEF.md / PROTOCOL.md / GUIDE.md for GET DOC")
+    ap.add_argument("--docs", default=None, help="folder with README.md / PROTOCOL.md / WINDOWS_BRIDGE.md for GET DOC")
     ap.add_argument("--nogui", action="store_true", help="console only")
     ap.add_argument("-v", "--verbose", action="store_true", help="log every Mac request except DELTA/PING")
     args = ap.parse_args()

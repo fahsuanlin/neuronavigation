@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-lv_binary_sim.py -- stand-in for the LabVIEW Main VI's binary TCP interface (the one codes/TMS_MATLAB_Controller
+lv_binary_sim.py -- stand-in for the LabVIEW Main VI's binary TCP interface (the one TMS_Robot/matlab_controller
 talks to), for testing tms_bridge.py --robot-proto binary without the robot.
 
     client -> VI : 72 bytes = 18 big-endian float32
