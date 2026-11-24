@@ -32,6 +32,7 @@ def serve(c, a):
     c.settimeout(0.1)
     buf = b""
     last = time.monotonic()
+    t_start = 0.0
     n = 0
     while True:
         try:
@@ -52,11 +53,15 @@ def serve(c, a):
                 tgt["theta"] = v[14]
             else:
                 tgt["phi"] = v[16]
+            t_start = time.monotonic() + a.latency
             print(f"RX 72B #{n}: " + " ".join(f"{k}={tgt[k]:.4g}" for k in tgt) + f" tab={v[12]:g}", flush=True)
         now = time.monotonic()
         dt, last = now - last, now
         moving = {}
         for k in pos:
+            if now < t_start:
+                moving[k] = False
+                continue
             e = tgt[k] - pos[k]
             if abs(e) < UNIT[k] / 2:
                 pos[k] = tgt[k]
@@ -66,8 +71,9 @@ def serve(c, a):
                 pos[k] += step if e > 0 else -step
                 moving[k] = True
         idle = lambda *ks: 0.0 if any(moving[k] for k in ks) else 1.0
-        c.sendall(RX.pack(idle("x"), pos["x"], idle("y"), pos["y"], idle("z"), pos["z"], idle("psi"), pos["psi"],
-                          idle("theta", "phi"), pos["theta"], pos["phi"]))
+        r = tgt if a.report == "target" else pos
+        c.sendall(RX.pack(idle("x"), r["x"], idle("y"), r["y"], idle("z"), r["z"], idle("psi"), r["psi"],
+                          idle("theta", "phi"), r["theta"], r["phi"]))
 
 
 def main():
@@ -76,6 +82,10 @@ def main():
     ap.add_argument("--port", type=int, default=6341)
     ap.add_argument("--theta", type=float, default=-85.0)
     ap.add_argument("--phi", type=float, default=53.1916)
+    ap.add_argument("--report", choices=("target", "position"), default="target",
+                    help="value sent back per axis: target (as the real VI, 2026-11-24) or position")
+    ap.add_argument("--latency", type=float, default=1.0,
+                    help="seconds between a packet and the start of motion (real VI: ~1 s)")
     a = ap.parse_args()
     s = socket.socket()
     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)

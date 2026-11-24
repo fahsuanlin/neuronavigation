@@ -323,7 +323,8 @@ class BinaryRobotLink:
     TX = struct.Struct(">18f")
     RX = struct.Struct(">11f")
     FRAME_TIMEOUT_S = 2.0
-    PENDING_MAX_S = 1.5             # a SET that changes nothing never shows motion: stop waiting after this
+    PENDING_MAX_S = 2.5             # the VI raises its moving flag ~1 s after a packet; a SET that changes
+                                    # nothing never shows motion, so stop waiting after this
     STEP = dict(X=1 / 26, Y=1 / 26, Z=1 / 26, PSI=1 / 26, THETA=0.15778, PHI=0.15778)
 
     def __init__(self, core, target, speed, curve_speed, init=None):
@@ -347,6 +348,8 @@ class BinaryRobotLink:
         self.cmd = None                   # current targets, seeded from the first frame after each connect
         self.init = init                  # --init: operator-given start targets, used when the VI sends no frame first
         self.got_frame = False
+        self.last_logged = None           # (values, moving) of the last status line written to the log
+        self.last_logged_t = 0.0
         self.tab_mode = 0
         self.pending = {}                 # axis -> (t_set, saw_motion)
         self.stop_ev = threading.Event()
@@ -452,16 +455,27 @@ class BinaryRobotLink:
                 self.core.log("*", "LabVIEW first frame: " + "  ".join(f"{a.lower()}={g(v)}" for a, v in real.items()))
                 if self.cmd is None:
                     self.cmd = dict(real)
-                else:
-                    diff = [a for a in real if a not in self.pending and abs(real[a] - self.cmd[a]) >= self.STEP[a] / 2]
-                    if diff:
-                        self.core.log("!", "first frame differs from the bridge targets in " + " ".join(diff)
-                                      + ": the next SET sends the bridge targets for all axes")
+            # The VI's values are its current targets (they jump to a new target at once), and its moving flag
+            # rises ~1 s after a packet. So: an axis the bridge moved stays 'moving' until the flag has risen and
+            # fallen (or PENDING_MAX_S without motion), and every other axis adopts the VI's value, so a target
+            # changed on the LabVIEW panel is kept by the next packet instead of being overwritten.
             for a, (t_set, saw) in list(self.pending.items()):
                 if mov[a]:
                     self.pending[a] = (t_set, True)
-                elif saw or abs(real[a] - self.cmd[a]) < self.STEP[a] / 2 or now - t_set > self.PENDING_MAX_S:
+                elif saw or now - t_set > self.PENDING_MAX_S:
                     del self.pending[a]
+            for a in real:
+                if a not in self.pending and abs(real[a] - self.cmd[a]) >= 1e-4:
+                    if not mov[a]:
+                        self.core.log("*", f"LabVIEW {a} target is {g(real[a])} (was {g(self.cmd[a])} on the bridge): adopted")
+                    self.cmd[a] = real[a]
+            # status history in the log: on every change of a value or moving flag, and every 10 s otherwise
+            key = (tuple(round(real[a], 4) for a in real), tuple(mov[a] for a in real))
+            if key != self.last_logged or now - self.last_logged_t >= 10:
+                moving = " ".join(a for a in LINEAR + ("THETA",) if mov[a]).replace("THETA", "CURVE")
+                self.core.log("=", "VI  " + "  ".join(f"{a.lower()}={g(real[a])}" for a in real)
+                              + ("   moving: " + moving if moving else "   idle"))
+                self.last_logged, self.last_logged_t = key, now
             m = {a: int(mov[a] or a in self.pending) for a in real}
             st = dict(t=int(now * 1000) % 10**9)
             st.update({a.lower(): real[a] for a in LINEAR + ANGULAR})
