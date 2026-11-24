@@ -467,6 +467,49 @@ The port is fixed at 6340 in `nav_camera_tool_comm.m`.
 
 ---
 
+### 11.7 Goto button (`nav_robot_goto.m`)
+`TargetGotoButton` moves the robot with `SET X/Y/Z` until the tracked marker reaches the target.
+Press it again to abort. Abort only stops new moves. The robot finishes the move in progress, and
+`STOP` is never sent. Goto needs a connection, a chosen marker that is visible, and a target.
+
+Protocol v1 has no "move the marker to here" request, and the robot axes are not aligned with the camera
+axes. Goto therefore runs a closed loop on the Mac:
+
+1. **Calibration** is done by the **`CALIBRATE <step mm>`** command (§11.8). Goto also runs it when it has
+   no calibration for the current marker (first Goto, marker changed, or after the loop diverged).
+   It moves X, Y and Z by +2 mm one after another, or −2 mm when +2 mm would leave the range. After
+   each move it waits until `mx=my=mz=0` in `GET STATUS` (polled at 4 Hz), lets the marker settle for
+   0.5 s and averages it over 0.5 s. The marker displacements give the Jacobian
+   `J` (3×3, marker mm per robot mm). Goto logs `J`. Calibration fails if one axis moves the marker
+   less than 0.3 mm per mm, which usually means the marker is not on the robot.
+2. **Servo**: `e = marker − target`; stop when `|e| ≤ 0.5 mm`. Otherwise `dr = −J⁻¹ e`, limited to
+   10 mm per move. Goto sends `SET` to the axes that change, quantized to 1/26 mm and clamped to ±25,
+   then waits for the move and measures the marker again, as in step 1.
+3. **Stops**: Goto stops after 8 moves, or when the error grows twice in a row (it then drops `J`).
+   It also stops when the move needs a robot axis beyond ±25 mm twice in a row ("out of reach"),
+   on a refused `SET` (`ERR BUSY`, `ERR OUT_OF_RANGE`, ...), on a lost marker or link, or when a move
+   takes longer than its expected time × 1.5 + 5 s.
+
+Parameters are at the top of `nav_robot_goto.m`. Moves at 4 steps/s are slow: 2 mm takes 13 s, so a
+first Goto with calibration takes about a minute on the real robot.
+
+### 11.8 Manual commands (`CommCmdDropDown` + `CommParamEditField`)
+- **No parameter** (`PING`, `GET STATUS`, `GET DELTA`, `HELP`): choosing it sends it at once, and the
+  dropdown goes back to `(choose)` so the same command can be picked again.
+- **With a parameter** (`SET X|Y|Z|PSI|THETA|PHI|L|R`, `GET DOC`): choosing it enables `param`
+  (the placeholder shows the expected value). Typing a value and pressing Enter sends it. The field
+  then empties, so the next value is sent too.
+- `CALIBRATE <step mm>` (0.5..5, e.g. `2`) runs only the calibration of §11.7 (no target needed).
+  It moves X, Y and Z by the step in turn and measures how the marker moves in camera coordinates.
+  It then logs the Jacobian, moves the robot back to its start position, and keeps the result for
+  Goto. The Goto/Abort button aborts it. It is a Mac-side command: the robot only sees `SET` and
+  `GET STATUS`.
+- `GET DOC <BRIEF|PROTOCOL|GUIDE>` saves the document to `tempdir/tms_robot_<NAME>.md` and logs the path.
+- `STOP`, `BYE` and `DELTA` are not in the list. Comm. handles BYE, and DELTA is streamed automatically.
+
+The callbacks are set in `nav_robot_tab(app,'init')`, like the other Robot tab controls, so the
+.mlapp needs no callback code for them.
+
 ## 12. Robot implementation (LabVIEW / simulators)
 
 ### 12.1 Real robot (planned)
@@ -477,8 +520,13 @@ CRLF mode, a case structure on the command, and replies via `TCP Write`. The ful
   buttons only nudge those targets, so no button presses are needed.
 - `DELTA` only writes the `Delta dx/dy/dz/d` indicators.
 - A front-panel **Remote** switch (default OFF) decides who drives the motion. When it is OFF, `SET` → `ERR BUSY operator has control`.
-- The myRIO is reachable only over USB (`172.22.11.2`), so the Windows PC runs
-  `tcp_bridge.py --listen 169.254.30.121:6340 --target 172.22.11.2:6340`.
+- The myRIO is reachable only over USB (`172.22.11.2`), so the Windows PC runs the **TMS Robot Bridge**
+  `TMS_Robot/TMS_Robot_Code/tcp/pc_bridge/tms_bridge.py` (2026-11-19, replaces the plain `tcp_bridge.py`).
+  It serves protocol v1 to the Mac on 6340 and keeps one connection to the VI. It answers
+  PING/HELP/DELTA/GET DELTA/GET DOC itself and forwards GET STATUS and SET. It has an *Allow motion from Mac* switch
+  (off → `ERR BUSY operator has control`), refuses STOP, and shows a monitor window. `--robot sim` uses a built-in
+  robot model until the VI loop exists. Its greeting is `HELLO TMS-ROBOT 1 bridge (robot connected|NOT connected)`.
+  When LabVIEW is down, `GET STATUS`/`SET` → `ERR BUSY robot not connected (...)`. See `TMS_Robot/TMS_Robot_Code/README.md`.
 - **Not live yet.** The robot side will announce when port 6340 switches from the simulator to the bridge.
 
 ### 12.2 Robot-side Python simulator (on the Windows PC)
@@ -609,3 +657,6 @@ clear c
 | 2026-11-18 | Mac en23 address changed to 169.254.240.129; link re-verified (robot docs unchanged). Simulator fixes: motion stalled at low speeds (fractional steps were dropped), and quantization is now anchored at the start value like the VI (THETA −85 → −84 gives −84.0533). `'set'` with a bad axis or value reports and sends nothing instead of throwing. Tested in MATLAB R2022b: 6/6 DELTA acked by both servers; SET → `ERR BUSY operator has control` handled. |
 | 2026-11-18 | App: new **Robot** tab (`nav_robot_tab.m`) with marker readout, target, marker − target table, 3D dots and a comm log. DELTA now carries marker − target (was the Mark ref offset). Replies are buffered by complete line. |
 | 2026-11-18 | Robot tab made self-wiring from the tracking loop (App Designer saves kept removing the hook lines from the .mlapp). |
+| 2026-11-19 | **Goto** button (`nav_robot_goto.m`: closed loop with auto-calibrated camera↔robot Jacobian) and manual **cmd./param** commands. Comm layer: quiet requests, STATUS parsing (`robot_status`), SET refusals recorded (`robot_set_err`), prefix reply matching, multi-line `GET DOC`. Fix: a request is queued *before* `writeline`. Before, a reply read by another timer callback during the write found no pending request, and all later replies were mismatched. Tested in R2022b against the simulator with a rotated/flipped camera frame: 0.08–0.16 mm in 2–3 moves; out-of-reach and abort cases; 113/113 DELTA acked. |
+| 2026-11-19 | `CALIBRATE <step mm>` command in cmd./param: only the camera↔robot calibration, then back to the start, result kept for Goto. Simulator: J within 0.06 of the true mapping; the next Goto skipped calibration and reached 0.23 mm in 2 moves. |
+| 2026-11-19 | Windows side: **TMS Robot Bridge** `tms_bridge.py` (standalone, tkinter monitor, Remote switch, STOP blocked, built-in sim). Tested on the Mac: protocol cases (one client, idle drop, DELTA rules, GET DOC framing, LabVIEW down/up auto-reconnect), and MATLAB CALIBRATE + Goto through the bridge unchanged (27/27 DELTA acked, 0.32 mm). Not yet run on Windows. Mac: ERR BUSY on SET now shows the server's reason. |

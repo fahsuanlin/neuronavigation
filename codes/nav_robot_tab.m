@@ -1,4 +1,4 @@
-function nav_robot_tab(app,action,varargin)
+function varargout=nav_robot_tab(app,action,varargin)
 %
 %   nav_robot_tab    the 'Robot' tab of nav_camera_terminal
 %
@@ -13,6 +13,10 @@ function nav_robot_tab(app,action,varargin)
 %   nav_robot_tab(app,'target_changed')       TargetX/Y/ZEditField callback: (re)define the target point
 %   nav_robot_tab(app,'frame',idx,p)          from nav_camera_graphic_update for every tracked tool and
 %                                             frame (p: 3x1 display coordinates, mm)
+%   [p,valid]=nav_robot_tab(app,'marker_pos') current position of the chosen marker and whether it is valid
+%   nav_robot_tab(app,'cmd_selected')         CommCmdDropDown callback: send a command without parameter at once;
+%                                             for one with a parameter, wait for CommParamEditField
+%   nav_robot_tab(app,'param_entered')        CommParamEditField callback: send '<cmd> <param>'
 %   nav_robot_tab(app,'log',kind,str)         add a line to app.RobotCommTextArea (newest line on top)
 %                                             (kind: '>' sent, '<' received, '*' status, '!' problem)
 %
@@ -24,6 +28,11 @@ function nav_robot_tab(app,action,varargin)
 %                  first edit sets it; unset fields count as 0). While the marker is valid,
 %                  TargetUITable shows marker - target: dx, dy, dz and the distance
 %                  d = sqrt(dx^2+dy^2+dz^2).
+%   Goto         : TargetGotoButton, nav_robot_goto: moves the robot (SET X/Y/Z, closed loop on
+%                  the tracked marker) until the marker reaches the target. Press again to abort.
+%   cmd. / param : CommCmdDropDown + CommParamEditField: manual commands to the robot PC
+%                  (PING, HELP, GET STATUS, GET DELTA, GET DOC <name>, SET <axis> <value>,
+%                  CALIBRATE <step mm>: camera/robot calibration used by Goto; never STOP).
 %   Comm.        : nav_camera_tool_comm; while connected the same dx, dy, dz, d are sent
 %                  as 'DELTA dx dy dz d' (~5 Hz) while the marker is valid and a target is set.
 %   RobotUIAxes  : a dot in the tool's color for the marker (reset when the marker changes;
@@ -41,6 +50,11 @@ send_period_s=0.2;    % DELTA to the robot (5 Hz)
 target_color=[0.85 0 0.85];
 lost_color=[0.6 0.6 0.6];
 max_log_lines=300;
+cmd_items={ ...   % CommCmdDropDown: command, parameter hint ('' = none). Never STOP.
+    '(choose)',''; 'PING',''; 'GET STATUS',''; 'GET DELTA',''; 'HELP',''; ...
+    'SET X','mm, -25..25'; 'SET Y','mm, -25..25'; 'SET Z','mm, -25..25'; 'SET PSI','mm, -25..25'; ...
+    'SET THETA','absolute'; 'SET PHI','absolute'; 'SET L','relative steps'; 'SET R','relative steps'; ...
+    'GET DOC','BRIEF|PROTOCOL|GUIDE'; 'CALIBRATE','step mm, e.g. 2'};
 
 if(nargin<2 || isempty(action))
     action='init';
@@ -67,6 +81,15 @@ switch lower(action)
         app.TargetYEditField.ValueChangedFcn=@(src,event) nav_robot_tab(app,'target_changed');
         app.TargetZEditField.ValueChangedFcn=@(src,event) nav_robot_tab(app,'target_changed');
         app.RobotCommButton.ButtonPushedFcn=@(src,event) nav_camera_tool_comm(app,'toggle');
+        app.TargetGotoButton.ButtonPushedFcn=@(src,event) nav_robot_goto(app,'toggle');
+        app.CommCmdDropDown.ValueChangedFcn=@(src,event) nav_robot_tab(app,'cmd_selected');
+        app.CommParamEditField.ValueChangedFcn=@(src,event) nav_robot_tab(app,'param_entered');
+        app.TargetGotoButton.Tooltip='Move the robot (X/Y/Z) until the marker reaches the target; press again to abort';
+        app.CommCmdDropDown.Items=cmd_items(:,1).';
+        app.CommCmdDropDown.Value=cmd_items{1,1};
+        app.CommCmdDropDown.Position(3)=85;     % room for 'GET STATUS'
+        app.CommParamEditField.Value='';
+        app.CommParamEditField.Enable='off';
         app.nav_camera.robot_marker_idx=[];
         app.nav_camera.robot_target=nan(3,1);
         app.nav_camera.robot_marker_h=gobjects(0);
@@ -129,6 +152,9 @@ switch lower(action)
     case 'marker_changed'
         idx=app.MarkerDropDown.Value;
         if(~isnumeric(idx) || isempty(idx) || idx<1) idx=[]; end;
+        if(~isequal(idx,app.nav_camera.robot_marker_idx))
+            nav_robot_goto(app,'abort','aborted: the marker changed');
+        end;
         app.nav_camera.robot_marker_idx=idx;
         app.nav_camera.robot_marker_valid=false;
         if(~isempty(app.nav_camera.robot_marker_h) && isgraphics(app.nav_camera.robot_marker_h))
@@ -216,6 +242,43 @@ switch lower(action)
         update_view(app);
         update_diff(app,p);
 
+    case 'marker_pos'
+        p=nan(3,1); valid=false;
+        if(~isempty(app.nav_camera.robot_marker_idx))
+            [p,valid]=marker_position(app,app.nav_camera.robot_marker_idx,valid_s);
+        end;
+        varargout={p,valid};
+
+    case 'cmd_selected'
+        cmd=app.CommCmdDropDown.Value;
+        k=find(strcmp(cmd_items(:,1),cmd),1);
+        if(isempty(k) || k==1)
+            app.CommParamEditField.Enable='off';
+            return;
+        end;
+        hint=cmd_items{k,2};
+        if(isempty(hint))
+            app.CommParamEditField.Enable='off';
+            nav_camera_tool_comm(app,'cmd',cmd,'');
+            app.CommCmdDropDown.Value=cmd_items{1,1};   % back to '(choose)', so the same command can be picked again
+        else
+            app.CommParamEditField.Enable='on';
+            app.CommParamEditField.Value='';
+            try app.CommParamEditField.Placeholder=hint; catch; end;
+            focus_param(app);
+            nav_robot_tab(app,'log','*',sprintf('%s: type the value (%s) in param and press Enter.',cmd,hint));
+        end;
+
+    case 'param_entered'
+        cmd=app.CommCmdDropDown.Value;
+        param=strtrim(app.CommParamEditField.Value);
+        k=find(strcmp(cmd_items(:,1),cmd),1);
+        if(isempty(k) || k==1 || isempty(param))
+            return;
+        end;
+        nav_camera_tool_comm(app,'cmd',cmd,param);
+        app.CommParamEditField.Value='';   % empty again, so the next value (even the same one) triggers a send
+
     case 'log'
         kind=varargin{1};
         str=varargin{2};
@@ -236,6 +299,13 @@ switch lower(action)
 end;
 
 return;
+
+
+function focus_param(app)
+try
+    focus(app.CommParamEditField);   % R2022b+
+catch
+end;
 
 
 function [p,valid]=marker_position(app,idx,valid_s)
