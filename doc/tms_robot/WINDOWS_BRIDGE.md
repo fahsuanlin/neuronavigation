@@ -61,6 +61,7 @@ Close the window to stop the bridge. Closing it does **not** stop the motors: us
 | `--robot-proto binary\|text` | `binary` | `binary` = Main VI 72B/44B interface; `text` = protocol v1 text lines (`GUIDE.md` VI loop). |
 | `--speed S` | `4` | X/Y/Z/PSI speed in steps/s, sent in every packet (binary). |
 | `--curve-speed S` | `4` | THETA/PHI speed in steps/s (binary). |
+| `--init X,Y,Z,PSI,THETA,PHI` | | Start targets when the VI sends no status before its first command, e.g. `0,0,0,0,0,0`. Must match the robot: the first `SET` sends all six. |
 | `--listen HOST:PORT` | `0.0.0.0:6340` | Where the Mac connects. |
 | `--remote` | off | Start with *Allow motion from Mac* ticked. |
 | `--nogui` | off | Console only, no window. |

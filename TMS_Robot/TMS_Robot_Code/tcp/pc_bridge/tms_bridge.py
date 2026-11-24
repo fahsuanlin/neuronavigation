@@ -326,7 +326,7 @@ class BinaryRobotLink:
     PENDING_MAX_S = 1.5             # a SET that changes nothing never shows motion: stop waiting after this
     STEP = dict(X=1 / 26, Y=1 / 26, Z=1 / 26, PSI=1 / 26, THETA=0.15778, PHI=0.15778)
 
-    def __init__(self, core, target, speed, curve_speed):
+    def __init__(self, core, target, speed, curve_speed, init=None):
         self.core = core
         self.target = target
         self.lock = threading.Lock()
@@ -345,6 +345,8 @@ class BinaryRobotLink:
         self.speed = float(speed)
         self.curve_speed = float(curve_speed)
         self.cmd = None                   # current targets, seeded from the first frame after each connect
+        self.init = init                  # --init: operator-given start targets, used when the VI sends no frame first
+        self.got_frame = False
         self.tab_mode = 0
         self.pending = {}                 # axis -> (t_set, saw_motion)
         self.stop_ev = threading.Event()
@@ -369,6 +371,7 @@ class BinaryRobotLink:
             pass
         self.sock = None
         self.cmd = None
+        self.got_frame = False
         self.pending.clear()
         self.state = f"not connected ({why})"
         self.core.log("!", f"LabVIEW link lost: {why}")
@@ -394,6 +397,11 @@ class BinaryRobotLink:
                 self.greeting = "binary 72B/44B"
                 self.state = f"connected to {h}:{p}, waiting for the first 44-byte frame"
             self.core.log("*", f"LabVIEW connected: {h}:{p} (binary 72B/44B interface)")
+            if self.init:
+                with self.lock:
+                    self.cmd = dict(self.init)
+                self.core.log("*", "start targets from --init (nothing sent until the first SET): "
+                              + "  ".join(f"{a.lower()}={g(v)}" for a, v in self.init.items()))
             buf = b""
             t_last = None
             t_conn = time.monotonic()
@@ -437,11 +445,18 @@ class BinaryRobotLink:
             if self.sock is None:
                 return
             self.n_rx += 1
-            if self.cmd is None:
-                self.cmd = dict(real)
+            if not self.got_frame:
+                self.got_frame = True
                 h, p = hostport(self.target)
                 self.state = f"connected to {h}:{p}"
                 self.core.log("*", "LabVIEW first frame: " + "  ".join(f"{a.lower()}={g(v)}" for a, v in real.items()))
+                if self.cmd is None:
+                    self.cmd = dict(real)
+                else:
+                    diff = [a for a in real if a not in self.pending and abs(real[a] - self.cmd[a]) >= self.STEP[a] / 2]
+                    if diff:
+                        self.core.log("!", "first frame differs from the bridge targets in " + " ".join(diff)
+                                      + ": the next SET sends the bridge targets for all axes")
             for a, (t_set, saw) in list(self.pending.items()):
                 if mov[a]:
                     self.pending[a] = (t_set, True)
@@ -497,7 +512,7 @@ class BinaryRobotLink:
                 return f"ERR BAD_ARGS {w[2]} is not a number"
             if a in LINEAR and not -LIMIT_MM <= v <= LIMIT_MM:
                 return f"ERR OUT_OF_RANGE {a} must be -{LIMIT_MM:g}..{LIMIT_MM:g}"
-            if not fresh or self.cmd is None:
+            if self.cmd is None or (not fresh and not self.init):
                 return "ERR BUSY no recent 44-byte frame from LabVIEW"
             self.cmd[a] = v
             if a == "THETA":
@@ -651,7 +666,7 @@ class Core:
         self.console = args.nogui
         self.verbose = args.verbose
         if args.robot != "sim" and args.robot_proto == "binary":
-            self.robot = BinaryRobotLink(self, args.robot, args.speed, args.curve_speed)
+            self.robot = BinaryRobotLink(self, args.robot, args.speed, args.curve_speed, args.init)
         else:
             self.robot = RobotLink(self, args.robot, args.poll)
         self.mac = MacServer(self, args.listen)
@@ -872,6 +887,9 @@ def main():
                     help="LabVIEW interface: binary = Main VI 72B/44B (TMS_MATLAB_Controller), text = protocol v1 lines")
     ap.add_argument("--speed", type=float, default=4.0, help="binary: X/Y/Z/PSI speed sent with every packet (steps/s)")
     ap.add_argument("--curve-speed", type=float, default=4.0, help="binary: THETA/PHI curve speed (steps/s)")
+    ap.add_argument("--init", default=None, metavar="X,Y,Z,PSI,THETA,PHI",
+                    help="binary: start targets to use when the VI sends no frame before the first command, "
+                         "e.g. 0,0,0,0,0,0. Must match the robot's actual state: the first SET sends all six.")
     ap.add_argument("--poll", type=float, default=4.0, help="text: GET STATUS rate to LabVIEW for the monitor (Hz, 0 = off)")
     ap.add_argument("--sim-speed", type=float, default=4.0, help="motor speed of --robot sim (steps/s; 4 = panel default)")
     ap.add_argument("--remote", action="store_true", help="start with 'Allow motion from Mac' on")
@@ -880,6 +898,13 @@ def main():
     ap.add_argument("--nogui", action="store_true", help="console only")
     ap.add_argument("-v", "--verbose", action="store_true", help="log every Mac request except DELTA/PING")
     args = ap.parse_args()
+    if args.init is not None:
+        try:
+            v = [float(x) for x in args.init.split(",")]
+            assert len(v) == 6 and all(math.isfinite(x) for x in v)
+        except (ValueError, AssertionError):
+            ap.error("--init needs six numbers: X,Y,Z,PSI,THETA,PHI")
+        args.init = dict(zip(LINEAR + ANGULAR, v))
     if args.poll > 20:
         ap.error("--poll must be <= 20 Hz (protocol rule)")
 
